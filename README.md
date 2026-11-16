@@ -4,7 +4,20 @@
 
 **An original-worldbuilding app powered by GenLayer Intelligent Contracts.** CANONATLAS helps writers and collaborative game communities publish new lore without silently contradicting an established world. A proposed scene is signed by an independent author, assessed by independent AI validators against three *frozen* canon dimensions, then separately ratified (or declined) by the human world steward.
 
-> **Build status — 16 Nov 2026:** Source published and GitHub Actions CI passing: Python contract tests, JavaScript tests, production frontend build and GenLayer unsigned schema/ABI checks. **Not yet deployed or independently accepted on GenLayer Studionet.** Sample-world data is illustrative only, not an on-chain AI verdict or live transaction.
+> **Live Studionet verified — 16 Nov 2026:** CANONATLAS V1 is deployed at [`0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0`](https://studio.genlayer.com/?import-contract=0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0). World #1, “The Glass Archipelago,” completed a signed **create → propose → CONSISTENT (3/3 AI checks) → RATIFIED** workflow, with independent steward/author wallets. Verified `LATEST_FINAL` confirms Entry #1 `RATIFIED`, canon version **1 → 2**, updated SHA-256 and no pending entry. [GitHub Actions live attestation](https://github.com/bearbaba/CANONATLAS/actions/runs/43853942589) also checks deployed-source identity and literal evidence citations. The default example UI remains illustrative until a user connects the live contract.
+
+
+
+### Verified live outcome — The Glass Archipelago, World #1
+
+| Signed action | On-chain transaction | Accepted effect |
+| --- | --- | --- |
+| Steward creates original world | [`create_world`](https://explorer-studio.genlayer.com/tx/0xbe916fa29daef995bb83928153f12a660cc3567fba63c4a8fa16714af0a82ecc) | Version 1, three frozen canon rules |
+| Independent author proposes chapter | [`propose_entry`](https://explorer-studio.genlayer.com/tx/0x1384d7090c28067de0a632066d1f76c82f5c05e50e6bcc79174550655e612cf5) | Signed Entry #1 and SHA-256 `e9a39e00efc04241d9fc923efa6e5a4d34ab706e91130f18ba17ac547ec3e39a` |
+| Original author requests GenLayer consensus | [`assess_entry`](https://explorer-studio.genlayer.com/tx/0xeffe34873b1183459e0c94556efc2a8860d09a294a64ffe1572035de2e6e857a) | Accepted `CONSISTENT`; continuity, chronology and world_rules PASS with verified literal references |
+| World steward ratifies the chapter | [`ratify_entry`](https://explorer-studio.genlayer.com/tx/0x36fe45d8308598e626e25ef5e045e62e7962da8e5d6233e0556e397e7bf6bcbc) | `RATIFIED`; canon version 2, `pending_entry=0`, `ratified_entries=[1]` |
+
+**Independent readback:** [`scripts/verify-live.mjs`](scripts/verify-live.mjs) validates deployment source and `LATEST_FINAL` world and entry state, 3 criterion references, original and upgraded canon digests, signer independence and steward ratification. [Successful CI](https://github.com/bearbaba/CANONATLAS/actions/runs/43853942589). The story and rules are original fictional demonstration data; no copyright ownership or general AI accuracy is certified.
 
 ## The product that makes this different
 
