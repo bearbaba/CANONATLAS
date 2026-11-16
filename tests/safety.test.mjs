@@ -1,0 +1,13 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {addressValid,actionGates,classifyTransaction,normalizeRead,validEntry,validWorld} from '../web/safety.js';
+const owner='0x'+'a'.repeat(40),writer='0x'+'b'.repeat(40),attacker='0x'+'c'.repeat(40);
+const world={id:2,owner,canon:[{},{},{}],canon_version:1,pending_entry:3};
+const entry={id:3,world_id:2,author:writer,status:'CONSISTENT',canon_version:1,scene_sha256:'a'.repeat(64)};
+test('address validation rejects arbitrary non-chain labels',()=>{assert.equal(addressValid(owner),true);assert.equal(addressValid('demo'),false)});
+test('world identity validates frozen canon shape',()=>{assert.equal(validWorld(world),true);assert.equal(validWorld({...world,owner:'wrong'}),false)});
+test('entry identity cannot be swapped between worlds',()=>{assert.equal(validEntry(entry,world),true);assert.equal(validEntry(entry,{...world,id:99}),false)});
+test('ratification requires the steward wallet and matching canon version',()=>{assert.equal(actionGates(world,entry,owner).ratify,true);assert.equal(actionGates(world,entry,writer).ratify,false);assert.equal(actionGates({...world,canon_version:2},entry,owner).ratify,false)});
+test('only original author can assess a pending submission',()=>{assert.equal(actionGates(world,{...entry,status:'SUBMITTED',assessment_runs:0},writer).assess,true);assert.equal(actionGates(world,{...entry,status:'SUBMITTED',assessment_runs:0},attacker).assess,false)});
+test('only independently signed authors may submit while no proposal is pending',()=>{assert.equal(actionGates({...world,pending_entry:0},null,writer).propose,true);assert.equal(actionGates({...world,pending_entry:0},null,owner).propose,false)});
+test('a finalized leader-success without majority is never accepted',()=>{assert.equal(classifyTransaction({status:'FINALIZED',consensus:'MAJORITYDISAGREE'}).accepted,false);assert.equal(classifyTransaction({status:'FINALIZED',consensus:'MAJORITYAGREE'}).accepted,true);assert.equal(classifyTransaction({status:'COMMITTING',consensus:'MAJORITYAGREE'}).accepted,false)});
+test('JSON reads fail closed on malformed remote data',()=>{assert.deepEqual(normalizeRead('{"id":1}'),{id:1});assert.throws(()=>normalizeRead('not JSON'))});
