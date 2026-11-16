@@ -26,8 +26,34 @@ const checks={
  entries:Number.isInteger(stats?.entries)&&stats.entries>=0
 };
 if(Object.values(checks).some(v=>!v))throw Error('Unexpected on-chain policy '+JSON.stringify({checks,stats}));
+
+// Verify actual committed world state when a world exists; no ledger artifact uploaded.
+let worldVerification=null;
+if(stats.worlds>0){
+ const rawWorld=await client.readContract({address,functionName:'get_world',args:[1],transactionHashVariant:TransactionHashVariant.LATEST_FINAL});
+ const world=typeof rawWorld==='string'?JSON.parse(rawWorld):rawWorld;
+ const stable=x=>Array.isArray(x)?x.map(stable):x&&typeof x==='object'?
+   Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>[k,stable(v)])):x;
+ const ruleHash=hash(JSON.stringify(stable(world.canon)));
+ const kinds=new Set(world.canon.map(rule=>rule.kind));
+ const worldChecks={
+  world_id:world.id===1,
+  owner:/^0x[a-f0-9]{40}$/.test(world.owner||''),
+  title:typeof world.title==='string'&&world.title.length>=5,
+  canon_version:Number.isInteger(world.canon_version)&&world.canon_version>=1,
+  canon_rules:Array.isArray(world.canon)&&world.canon.length>=3,
+  all_dimensions:['continuity','chronology','world_rules'].every(kind=>kinds.has(kind)),
+  canon_hash:world.canon_sha256===ruleHash,
+  active_pending:Number.isInteger(world.pending_entry)&&world.pending_entry>=0,
+  finality:'LATEST_FINAL'
+ };
+ if(Object.values(worldChecks).some(v=>v===false))throw Error('Invalid finalized world '+JSON.stringify({worldChecks,world}));
+ worldVerification={id:world.id,owner:world.owner,title:world.title,canon_version:world.canon_version,
+    canon_sha256:world.canon_sha256,pending_entry:world.pending_entry,checks:worldChecks};
+}
+
 console.log(JSON.stringify({
  verified:true,address,network:'GenLayer Studionet',chain_id:61999,
  deployed_code_sha256:hash(deployed),source_matches_after_line_normalization:true,
- stats,finality:'LATEST_FINAL',no_write:true
+ stats,worldVerification,finality:'LATEST_FINAL',no_write:true
 },null,2));
