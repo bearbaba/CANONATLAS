@@ -10,7 +10,7 @@ const example={id:1,owner:'0x'+'a'.repeat(40),title:'The Glass Archipelago',
  premise:'A sea-bound world of light-bearing guardians, memory mirrors and irreversible tides.',
  canon:EXAMPLE_RULES,canon_version:1,canon_sha256:'',pending_entry:0,ratified_entries:[],closed_entries:[]};
 const labels={continuity:'Living continuity',chronology:'The timeline',world_rules:'Laws of the world'};
-let contract=localStorage.getItem('canonatlas_address')||'',actor='',world=null,entry=null,busy=false;
+let contract=localStorage.getItem('canonatlas_address')||'0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0',actor='',world=null,entry=null,busy=false;
 $('contract').value=contract;$('rules').value=JSON.stringify(EXAMPLE_RULES,null,2);
 function log(text){$('log').textContent=text}
 function setMode(live){$('mode').textContent=live?'LATEST_FINAL · LIVE':'ILLUSTRATIVE PREVIEW';$('mode').classList.toggle('connected',!!live)}
@@ -94,3 +94,5 @@ $('decline').addEventListener('click',()=>run(async()=>{
  await sign('decline_entry',[entry.id,reason]);
 }));
 render();updateHash().catch(e=>log(e.message));
+// Show accepted on-chain canon when available; failed reads remain preview and cannot authorize signatures.
+run(refresh);
