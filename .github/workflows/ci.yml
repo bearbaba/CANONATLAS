@@ -21,3 +21,7 @@ jobs:
       - run: npm install --no-audit --no-fund
       - run: npm run build
       - run: npm run schema:studionet
+      - name: Verify live Studionet code, ABI policy and LATEST_FINAL stats
+        env:
+          CANONATLAS_CONTRACT_ADDRESS: '0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0'
+        run: node scripts/verify-live.mjs
