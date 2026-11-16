@@ -52,8 +52,57 @@ if(stats.worlds>0){
     canon_sha256:world.canon_sha256,pending_entry:world.pending_entry,checks:worldChecks};
 }
 
+
+let entryVerification=null;
+if(stats.entries>0){
+ const rawEntry=await client.readContract({address,functionName:'get_entry',args:[1],transactionHashVariant:TransactionHashVariant.LATEST_FINAL});
+ const rawWorld=await client.readContract({address,functionName:'get_world',args:[1],transactionHashVariant:TransactionHashVariant.LATEST_FINAL});
+ const rawBank=await client.readContract({address,functionName:'get_reference_bank',args:[1],transactionHashVariant:TransactionHashVariant.LATEST_FINAL});
+ const parsed=x=>typeof x==='string'?JSON.parse(x):x;
+ const entry=parsed(rawEntry),world=parsed(rawWorld),bank=parsed(rawBank);
+ const stable=x=>Array.isArray(x)?x.map(stable):x&&typeof x==='object'?
+   Object.fromEntries(Object.entries(x).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>[k,stable(v)])):x;
+ const firstCanon=hash(JSON.stringify(stable(entry.canon_snapshot)));
+ const cited=new Set();
+ const citations=entry.assessment?.checks;
+ const literalCitations=Array.isArray(citations)&&citations.length===3&&citations.every(check=>{
+   if(!['continuity','chronology','world_rules'].includes(check.criterion)||cited.has(check.criterion)||check.result!=='PASS')return false;
+   cited.add(check.criterion);
+   if(!Array.isArray(check.references)||check.references.length<2||check.references.length>4)return false;
+   const unique=new Set(),fields=[];
+   for(const ref of check.references){
+     const source=bank[ref.ref_id];
+     if(!source||source.field!==ref.field||source.quote!==ref.quote||unique.has(ref.ref_id))return false;
+     fields.push(ref.field);unique.add(ref.ref_id);
+   }
+   return fields.includes('scene')&&fields.includes(check.criterion);
+ });
+ const record=world.canon.find(rule=>rule.id==='ENTRY_1');
+ const entryChecks={
+  entry_id:entry.id===1&&entry.world_id===world.id,
+  signed_author:/^0x[a-f0-9]{40}$/.test(entry.author||'')&&entry.author!==world.owner,
+  scene_sha256:entry.scene_sha256===hash(entry.scene),
+  frozen_initial_canon_sha256:entry.canon_sha256===firstCanon,
+  frozen_initial_version:entry.canon_version===1,
+  ai_consensus_stored:entry.assessment?.verdict==='CONSISTENT'&&literalCitations&&entry.assessment_runs===1,
+  entry_ratified:entry.status==='RATIFIED',
+  steward_world_v2:world.canon_version===2,
+  no_pending_entry:world.pending_entry===0,
+  ratification_receipt:Array.isArray(world.ratified_entries)&&world.ratified_entries.includes(1),
+  canonical_entry_proven:!!record&&record.kind==='continuity'&&record.text===entry.scene,
+  canonical_hash_changed:world.canon_sha256!==entry.canon_sha256,
+  active_canon_length:world.canon.length===entry.canon_snapshot.length+1
+ };
+ if(Object.values(entryChecks).some(x=>!x))throw Error('Entry / AI consensus / Steward ratification failed: '+JSON.stringify({entryChecks,status:entry.status,worldVersion:world.canon_version}));
+ entryVerification={id:entry.id,world_id:entry.world_id,author:entry.author,scene_sha256:entry.scene_sha256,
+   status:entry.status,consensus:entry.assessment.verdict,criteria:citations.map(c=>c.criterion+':'+c.result),
+   assessment_runs:entry.assessment_runs,ratified_world_version:world.canon_version,
+   frozen_canon_sha256:entry.canon_sha256,new_canon_sha256:world.canon_sha256,
+   check_count:Object.keys(entryChecks).length,checks:entryChecks};
+}
+
 console.log(JSON.stringify({
  verified:true,address,network:'GenLayer Studionet',chain_id:61999,
  deployed_code_sha256:hash(deployed),source_matches_after_line_normalization:true,
- stats,worldVerification,finality:'LATEST_FINAL',no_write:true
+ stats,worldVerification,entryVerification,finality:'LATEST_FINAL',no_write:true
 },null,2));
