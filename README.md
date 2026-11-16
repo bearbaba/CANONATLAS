@@ -4,7 +4,7 @@
 
 **An original-worldbuilding app powered by GenLayer Intelligent Contracts.** CANONATLAS helps writers and collaborative game communities publish new lore without silently contradicting an established world. A proposed scene is signed by an independent author, assessed by independent AI validators against three *frozen* canon dimensions, then separately ratified (or declined) by the human world steward.
 
-> **Build status — 16 Nov 2026:** independent runnable source, wallet-aware frontend, source-pinned Python contract, local/shim unit tests and CI configuration are included. **Not yet deployed or validated on GenLayer Studionet.** The sample world and UI preview are local illustrative data; they are NOT accepted AI verdicts, blockchain evidence, copyright registrations, or live transactions. The target internal score of 9.5/10 is not claimed until signed live acceptance.
+> **Build status — 16 Nov 2026:** Source published and GitHub Actions CI passing: Python contract tests, JavaScript tests, production frontend build and GenLayer unsigned schema/ABI checks. **Not yet deployed or independently accepted on GenLayer Studionet.** Sample-world data is illustrative only, not an on-chain AI verdict or live transaction.
 
 ## The product that makes this different
 
@@ -63,13 +63,13 @@ The final two commands require a working npm package registry and Studionet RPC.
 
 The **Glass Archipelago** is fictional. Its three immutable starting rules state that Keepers never crossed the Quiet Sea, Ilyra was founded before the Great Tide, and memory mirrors cannot transport bodies. A proposed scene about sending an encoded message rather than crossing the forbidden sea provides an illustrative **consistent candidate**. The contract must still obtain an actual accepted GenLayer AI assessment before ratification.
 
-[**Studio acceptance guide**](docs/STUDIO_ACCEPTANCE.md) gives exact input values, wallets, SHA-256 and both positive and rejection tests. [**Security boundaries**](docs/SECURITY_MODEL.md) andthe release criteria avoid overstating completion.
+[**Studio acceptance guide**](docs/STUDIO_ACCEPTANCE.md) gives exact input values, wallets, SHA-256 and both positive and rejection tests. [**Security boundaries**](docs/SECURITY_MODEL.md) and the release criteria avoid overstating completion.
 
 ## Proof status and constraints
 
-**Local verified:** Python shim unit tests (security gates, immutable snapshots, citation integrity, distinct wallets, failure modes), Node.js authorization tests, source syntax. See current package output for counts.
+**Verified in CI:** 19 Python unit tests and 8 JavaScript tests, contract syntax, frontend production build and unsigned GenLayer ABI/schema checks. [GitHub Actions](https://github.com/bearbaba/CANONATLAS/actions). These tests do not replace signed Studionet consensus.
 
-**Not yet verified:** deployed Studionet source/ABI, accepted multi-validator consensus, full signed `SUBMITTED → CONSISTENT → RATIFIED`, browser-wallet E2E, remote CI run, and GitHub repository URL (this bundle has not been pushed to a new repository).
+**Awaiting live acceptance:** deployed Studionet source/ABI, independently confirmed multi-validator consensus, the signed `SUBMITTED → CONSISTENT → RATIFIED` workflow and browser-wallet end-to-end verification. Use the [Studio acceptance guide](docs/STUDIO_ACCEPTANCE.md).
 
 There is no token, payout, copyright transfer, ownership verification, user identity proof, paid service or auto-publication. Consensus applies only to the submitted text and frozen original-fiction canon; interpretations can be wrong.
 
