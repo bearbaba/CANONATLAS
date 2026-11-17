@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {initializeWorkspace,resolveScreen} from '../web/workspace.js';
 
-const screens=["overview","canon","proposal","chain"];
-const groupNames=["overview","overview","canon","proposal","chain"];
+const screens=["overview","canon","proposal","chain","history"];
+const groupNames=["overview","overview","canon","proposal","chain","history"];
 function classList(initial=[]){
  const set=new Set(initial);
  return {add:x=>set.add(x),remove:x=>set.delete(x),contains:x=>set.has(x),
