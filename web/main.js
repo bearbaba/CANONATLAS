@@ -41,7 +41,33 @@ function renderRules(w){const parent=$('canonList');parent.replaceChildren();
   a.append(id,num,h,p);parent.append(a);
  }
 }
+function renderEvidence(){
+ const root=$('canonEvidence');root.replaceChildren();
+ const checks=entry?.assessment?.checks;
+ if(!Array.isArray(checks)||checks.length===0){
+  const message=document.createElement('p');message.textContent=
+    entry?.status==='REVIEW'?'Consensus did not produce a verified three-criterion assessment; ratification is blocked.':
+    'Real methodology references appear after reading an assessed entry at LATEST_FINAL.';
+  root.append(message);return;
+ }
+ for(const check of checks){
+  const article=document.createElement('article');article.className='canon-evidence-item';
+  const head=document.createElement('strong');
+  head.textContent=String(check.criterion||'unknown').replaceAll('_',' ')+' · '+String(check.result||'UNKNOWN');
+  const reason=document.createElement('p');reason.textContent=String(check.reason||'No reasoning supplied.');
+  article.append(head,reason);
+  for(const ref of Array.isArray(check.references)?check.references:[]){
+   const div=document.createElement('div');div.className='canon-ref';
+   const id=document.createElement('span');id.textContent=String(ref.ref_id||'')+' / '+String(ref.field||'');
+   const quote=document.createElement('p');quote.textContent=String(ref.quote||'');
+   div.append(id,quote);article.append(div);
+  }
+  root.append(article);
+ }
+}
+
 function render(){const w=world||example;renderRules(w);
+ renderEvidence();
  $('canonVersion').textContent='v'+w.canon_version;
  $('worldState').textContent=world?'VERIFIED':'PREVIEW';
  $('pendingCount').textContent=world?(w.pending_entry||'NONE'):'—';
