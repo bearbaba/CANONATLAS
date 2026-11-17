@@ -41,3 +41,12 @@
 .wallet-alert.is-warning{border-color:#a48b57;background:#2e251b;color:#fbe9be}
 .wallet-alert.is-error{border-color:#ae6678;background:#301a2b;color:#ffe2ea}
 .wallet-alert.is-success{border-color:#689c84;background:#18332c;color:#d8ffea}
+
+/* Compact wallet control: status belongs in the top-right, not a full-width success banner. */
+.wallet-identity{display:inline-flex;align-items:center;max-width:190px;min-height:35px;
+ padding:7px 10px;border:1px solid #524268;border-radius:8px;background:#1c182b;
+ color:#e7d8fb;font:700 11px/1.3 ui-monospace,monospace;white-space:nowrap}
+.wallet-identity[hidden]{display:none!important}
+.top-actions{gap:9px}
+@media(max-width:680px){.wallet-identity{font-size:10px;max-width:145px;padding:6px 8px}
+ .top-actions{flex-wrap:wrap;justify-content:flex-end;gap:7px}}
