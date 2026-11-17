@@ -49,7 +49,7 @@ function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntr
    }else if(method==='propose_entry'){
     entriesCount+=1;entry={...entry,id:entriesCount,world_id:world.id,author:actor,
       status:'SUBMITTED',canon_version:world.canon_version,
-      scene:'A new author's original scene.',scene_sha256:'c'.repeat(64),
+      scene:"A new author's original scene.",scene_sha256:'c'.repeat(64),
       assessment_runs:0,assessment:{}};world={...world,pending_entry:entriesCount};
    }
    else if(method==='decline_entry'){entry={...entry,status:'DECLINED'};world={...world,pending_entry:0};}
