@@ -5,6 +5,7 @@ import {runInNewContext} from 'node:vm';
 import {webcrypto} from 'node:crypto';
 import {finalReceipt,combineFinalChecks,normalizePendingTx} from '../web/tx-status.js';
 import {addressValid,validWorld,validEntry,actionGates} from '../web/safety.js';
+import {readTxHistory,upsertTxHistory,migrateLegacyTx} from '../web/history.js';
 
 const OWNER='0x'+'a'.repeat(40),AUTHOR='0x'+'b'.repeat(40),HASH='0x'+'f'.repeat(64);
 const CONTRACT='0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0';
@@ -70,9 +71,11 @@ function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntr
   .replace(/^import .*;\s*$/gm,'');
  const imports=`const {connectWallet,disconnectWallet,subscribeWalletChanges,read,write,waitForFinalized,getTransactionState,getConsensusReceipt,explorer}=globalThis.deps;
 const {finalReceipt,combineFinalChecks,normalizePendingTx}=globalThis.tx;
-const {addressValid,validWorld,validEntry,actionGates}=globalThis.safety;`;
+const {addressValid,validWorld,validEntry,actionGates}=globalThis.safety;
+const {readTxHistory,upsertTxHistory,migrateLegacyTx}=globalThis.historyDeps;`;
  runInNewContext(imports+code,{
   deps,tx:{finalReceipt,combineFinalChecks,normalizePendingTx},safety:{addressValid,validWorld,validEntry,actionGates},
+  historyDeps:{readTxHistory,upsertTxHistory,migrateLegacyTx},
   document:{getElementById:$,createElement:element},window:{ethereum:{on:(key,cb)=>events[key]=cb}},
   localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),
     removeItem:k=>storage.delete(k)},
@@ -117,13 +120,13 @@ test('author wallet cannot ratify an author-written entry',async()=>{
 test('network timeout preserves signed hash and resumes without duplicate signature',async()=>{
  const h=harness({timeout:true});await flush();await h.click('connect');
  await h.click('ratify');
- assert.equal(h.storage.size,1);
+ assert.ok(h.storage.has('canonatlas_pending_'+CONTRACT.toLowerCase()));
  assert.equal(h.writes.length,1);
  assert.equal(h.$('ratify').disabled,true);
  assert.equal(h.$('resume').disabled,false);
  h.timeout=false;await h.click('resume');
  assert.equal(h.writes.length,1);
- assert.equal(h.storage.size,0);
+ assert.ok(!h.storage.has('canonatlas_pending_'+CONTRACT.toLowerCase()));
  assert.equal(h.$('entryStatus').textContent,'RATIFIED');
 });
 test('evidence inspector displays original frozen quote as inert text',async()=>{
@@ -253,7 +256,7 @@ test('consensus timeout ends the spinner at UNVERIFIED, without resubmitting',as
  const h=harness({timeout:true});await flush();await h.click('connect');await h.click('ratify');
  assert.equal(h.$('txProgressLabel').textContent,'UNVERIFIED');
  assert.equal(h.$('txProgressSpinner').hidden,true);
- assert.equal(h.storage.size,1);
+ assert.ok(h.storage.has('canonatlas_pending_'+CONTRACT.toLowerCase()));
  assert.equal(h.writes.length,1);
  h.timeout=false;await h.click('resume');
  assert.equal(h.$('txProgressLabel').textContent,'SUCCESS');
@@ -297,4 +300,41 @@ test('uncertain outcome still shows TX Explorer link and one-click resume',async
  assert.equal(h.$('txProgressLabel').textContent,'SUCCESS');
  assert.equal(h.$('txProgressLink').href,'https://explorer-studio.genlayer.com/tx/'+HASH);
  assert.equal(h.writes.length,1,'resume must never re-submit');
+});
+
+test('finished or FAILED transaction notice closes without deleting its archived TX and Explorer link',async()=>{
+ const h=harness();await flush();await h.click('connect');await h.click('ratify');
+ assert.equal(h.$('txProgress').hidden,false);
+ const before=readTxHistory({getItem:k=>h.storage.get(k)||null},CONTRACT);
+ assert.equal(before.length,1);
+ assert.equal(before[0].hash,HASH);
+ assert.equal(before[0].stage,'success');
+ await h.click('txProgressDismiss');
+ assert.equal(h.$('txProgress').hidden,true);
+ assert.equal(h.writes.length,1);
+ assert.equal(h.$('txHistoryList').children.length,1);
+ const card=h.$('txHistoryList').children[0];
+ assert.equal(card.children[1].href,'https://explorer-studio.genlayer.com/tx/'+HASH);
+ assert.equal(card.children[0].children[1].textContent,HASH);
+ assert.equal(card.children[0].children[0].children[0].textContent,'SUCCESS');
+});
+test('timeout history remains UNVERIFIED with original hash; resume updates same entry',async()=>{
+ const h=harness({timeout:true});await flush();await h.click('connect');await h.click('ratify');
+ const storage={getItem:k=>h.storage.get(k)||null};
+ assert.equal(readTxHistory(storage,CONTRACT).length,1);
+ assert.equal(readTxHistory(storage,CONTRACT)[0].stage,'unverified');
+ await h.click('txProgressDismiss');
+ assert.equal(h.$('txProgress').hidden,true);
+ h.timeout=false;await h.click('resume');
+ const rows=readTxHistory(storage,CONTRACT);
+ assert.equal(rows.length,1);
+ assert.equal(rows[0].stage,'success');
+ assert.equal(h.writes.length,1);
+});
+test('transaction history is a separate workspace; dismiss button is not a wallet action',()=>{
+ const html=readFileSync(new URL('../web/index.html',import.meta.url),'utf8');
+ assert.match(html,/id="txProgressDismiss"/);
+ assert.match(html,/id="txHistoryList"/);
+ assert.match(html,/href="#history"/);
+ assert.match(html,/data-workspace-screens="overview,canon,proposal,chain,history"/);
 });
