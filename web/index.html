@@ -9,6 +9,16 @@
 <main id="top" class="main">
 <header class="topline"><span class="breadcrumb">ATLAS / THE GLASS ARCHIPELAGO / <strong>WORKSPACE</strong></span><div class="top-actions"><span id="mode" class="mode-pill">ILLUSTRATIVE PREVIEW</span><span id="walletIdentity" class="wallet-identity" hidden></span><button id="connect" class="button ghost">Connect wallet ↗</button></div></header>
 <div id="walletAlert" class="wallet-alert" role="status" aria-live="polite" hidden></div>
+<div id="txProgress" class="tx-progress" role="status" aria-live="polite" hidden>
+ <span id="txProgressSpinner" class="tx-progress-spinner" aria-hidden="true"></span>
+ <div class="tx-progress-text"><strong id="txProgressLabel">TRANSACTION STATUS</strong>
+ <small id="txProgressDetail">Waiting for transaction</small></div>
+ <div id="txProgressProof" class="tx-progress-proof" hidden>
+  <code id="txProgressHash"></code>
+  <a id="txProgressLink" href="#" target="_blank" rel="noopener noreferrer">View TX ↗</a>
+ </div>
+ <button id="txProgressResume" class="tx-progress-resume" type="button" hidden>Resume ↻</button>
+</div>
 <nav class="workspace-tabs" aria-label="Workspace sections"><a class="workspace-tab" href="#overview">Overview</a><a class="workspace-tab" href="#canon">Canon ledger</a><a class="workspace-tab" href="#proposal">Submit chapter</a><a class="workspace-tab" href="#chain">On-chain</a></nav>
 <section class="hero" id="overview" data-workspace-screen="overview"><div class="hero-copy"><div class="eyebrow"><span class="spark">✦</span> DECENTRALIZED WORLD CANON</div><h1>Every world has<br/><em>its own truth.</em></h1><p>Let stories evolve without breaking the universe that made them possible. Evidence-bound AI consensus screens new lore; the world steward makes the final call.</p><div class="hero-actions"><a href="#proposal" class="button primary">Propose new lore <span>↗</span></a><a href="#chain" class="button outline">Explore the protocol</a></div><div class="security-note">◆ <span>No automated publication · No claims of content ownership · Finality verified on-chain</span></div></div>
 <div class="orbit-stage" aria-hidden="true"><div class="orbit o1"></div><div class="orbit o2"></div><div class="orbit o3"></div><div class="core"><span>✧</span></div><div class="satellite a">✦</div><div class="satellite b">✧</div><div class="satellite c">◈</div><div class="orbit-tag top">CHRONOLOGY</div><div class="orbit-tag bottom">CONTINUITY</div></div></section>
@@ -21,11 +31,7 @@
 <section id="chain" class="section chain-panel" data-workspace-screen="chain"><div class="section-head"><div><span class="eyebrow">03 / LIVE PROTOCOL</span><h2>Connected to consensus</h2><p>Import your own deployed contract, read latest-final state, or sign a wallet-authorized action.</p></div></div>
 <div class="console-grid"><div class="panel"><div class="field"><label for="contract">CONTRACT ADDRESS · STUDIONET</label><input id="contract" placeholder="0x… (deploy the contract in Studio first)" autocomplete="off"/></div><div class="row-fields"><div class="field"><label for="worldId">WORLD ID</label><input id="worldId" type="number" min="1" value="1"/></div><div class="field"><label for="entryId">ENTRY ID</label><input id="entryId" type="number" min="1" value="1"/></div></div><div class="action-grid"><button id="load" class="button outline">Read latest-final ↻</button><button id="resume" class="button outline" disabled title="Check the original transaction hash; never request a duplicate signature">Resume pending tx ↻</button><button id="create" class="button outline">Create new world ↗</button></div><details class="advanced"><summary>Seed a new world · owner wallet</summary><div class="field"><label for="worldTitle">WORLD TITLE</label><input id="worldTitle" value="The Glass Archipelago"/></div><div class="field"><label for="premise">WORLD PREMISE</label><textarea id="premise" rows="2">A sea-bound world of light-bearing guardians, memory mirrors and irreversible tides.</textarea></div><div class="field"><label for="rules">3 CANON RULES · JSON</label><textarea id="rules" rows="9"></textarea></div></details></div>
 <div class="panel console-output"><div class="tiny-label">LIVE STATUS & RECEIPTS</div>
-<div id="txProgress" class="tx-progress" role="status" aria-live="polite" hidden>
- <span id="txProgressSpinner" class="tx-progress-spinner" aria-hidden="true"></span>
- <div class="tx-progress-text"><strong id="txProgressLabel">WAITING</strong>
- <small id="txProgressDetail"></small></div>
-</div>
+
 <div id="log" role="status" aria-live="polite">Preview is local. Set a deployed contract address and connect an authorized Studionet wallet to perform real writes.</div><div id="txBox" class="tx-box" hidden><span>TRANSACTION SENT — NOT YET VERIFIED</span><a id="txLink" target="_blank" rel="noopener noreferrer">View on explorer ↗</a></div><div class="reference-line"><span>WORLD CANON SHA-256</span><code id="canonHash">—</code></div></div></div></section>
 <footer>CANONATLAS <span>·</span> The living canon protocol <span>·</span> GenLayer research MVP <span class="foot-right">ORIGINAL WORLDS ONLY · NO COPYRIGHT TRANSFER</span></footer>
 </main></div><script type="module" src="./main.js"></script><script type="module" src="./workspace.js"></script></body></html>
