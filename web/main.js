@@ -1,6 +1,7 @@
 import {connectWallet,disconnectWallet,subscribeWalletChanges,read,write,waitForFinalized,getTransactionState,getConsensusReceipt,explorer} from './chain.js';
 import {finalReceipt,combineFinalChecks,normalizePendingTx} from './tx-status.js';
 import {addressValid,validWorld,validEntry,actionGates} from './safety.js';
+import {readTxHistory,upsertTxHistory,migrateLegacyTx} from './history.js';
 const $=id=>document.getElementById(id);
 const EXAMPLE_RULES=[
  {id:'CHAR1',kind:'continuity',text:'The Lumen Keepers preserve the solar lantern and none has crossed the Quiet Sea.'},
@@ -31,14 +32,46 @@ $('contract').value=contract;$('rules').value=JSON.stringify(EXAMPLE_RULES,null,
 function log(text){$('log').textContent=text}
 const writeButtons={create_world:'create',propose_entry:'propose',assess_entry:'assess',
  ratify_entry:'ratify',decline_entry:'decline'};
-const lastTxKey=address=>'canonatlas_last_verified_tx_'+address.toLowerCase();
+let dismissedHash='';
+function renderTxHistory(){
+ const root=$('txHistoryList');root.replaceChildren();
+ const items=readTxHistory(localStorage,contract);
+ if(!items.length){
+  const note=document.createElement('p');
+  note.className='tx-history-empty';
+  note.textContent='No transaction history saved in this browser.';
+  root.append(note);return;
+ }
+ const stageNames={success:'SUCCESS',failed:'FAILED',unverified:'UNVERIFIED',
+  submitted:'SUBMITTED',consensus:'IN PROGRESS',readback:'VERIFYING',undetermined:'UNDETERMINED'};
+ for(const item of items){
+  const card=document.createElement('article');card.className='tx-history-item';
+  const info=document.createElement('div');info.className='tx-history-info';
+  const header=document.createElement('div');header.className='tx-history-head';
+  const badge=document.createElement('span');badge.className='tx-history-state is-'+item.stage;
+  badge.textContent=stageNames[item.stage]||'UNVERIFIED';
+  const method=document.createElement('strong');method.className='tx-history-method';
+  method.textContent=item.method.replaceAll('_',' ');
+  header.append(badge,method);
+  const hash=document.createElement('code');hash.className='tx-history-hash';hash.textContent=item.hash;
+  const detail=document.createElement('p');detail.className='tx-history-detail';detail.textContent=item.detail;
+  const date=document.createElement('small');date.className='tx-history-detail';
+  date.textContent='Saved in browser: '+new Date(item.savedAt).toLocaleString();
+  const link=document.createElement('a');link.href=explorer(item.hash);
+  link.target='_blank';link.rel='noopener noreferrer';link.textContent='View TX ↗';
+  info.append(header,hash,detail,date);card.append(info,link);root.append(card);
+ }
+}
 function txProgress(stage,method='',detail='',transactionHash=''){
  const labels={signing:'AWAITING WALLET SIGNATURE',submitted:'TRANSACTION SUBMITTED',
   consensus:'GENLAYER CONSENSUS',readback:'VERIFYING LATEST_FINAL',success:'SUCCESS',
   failed:'FAILED',unverified:'UNVERIFIED'};
  const hash=transactionHash||pendingTx?.hash||'';
  const verifiedHash=/^0x[a-fA-F0-9]{64}$/.test(hash)?hash:'';
- const root=$('txProgress');root.hidden=false;root.className='tx-progress is-'+stage;
+ const root=$('txProgress');
+ if(stage==='signing')dismissedHash='';
+ root.hidden=!!verifiedHash&&dismissedHash===verifiedHash;
+ root.className='tx-progress is-'+stage;
  $('txProgressLabel').textContent=labels[stage]||'PROCESSING';
  $('txProgressDetail').textContent=(method?method.replaceAll('_',' ')+' · ':'')+detail;
  $('txProgressSpinner').hidden=!['signing','submitted','consensus','readback'].includes(stage);
@@ -50,21 +83,19 @@ function txProgress(stage,method='',detail='',transactionHash=''){
    $(id).classList.toggle('is-tx-loading',
      ['signing','submitted','consensus','readback'].includes(stage)&&method===methodName);
  }
- // Only FINALIZED receipt + verified readback permits a durable success label.
- if(verifiedHash&&['success','failed'].includes(stage)){
-  try{if(typeof sessionStorage!=='undefined')sessionStorage.setItem(lastTxKey(contract),
-    JSON.stringify({stage,method,detail,hash:verifiedHash}));}catch{}
+ // Record observed statuses in a browser-local audit trail. No chain state is modified.
+ if(verifiedHash&&method&&['submitted','consensus','readback','unverified','success','failed'].includes(stage)){
+  upsertTxHistory(localStorage,contract,{stage,method,detail,hash:verifiedHash});
+  renderTxHistory();
  }
 }
 function restoreLastTx(){
+ // Migrate the previous release's sticky FAILED/SUCCESS banner to History.
+ // An old terminal notification must never automatically reappear after reload.
+ try{migrateLegacyTx(localStorage,typeof sessionStorage==='undefined'?null:sessionStorage,contract)}catch{}
  $('txProgress').hidden=true;
- if(pendingTx)return;
- try{
-  if(typeof sessionStorage==='undefined')return;
-  const v=JSON.parse(sessionStorage.getItem(lastTxKey(contract))||'null');
-  if(v&&['success','failed'].includes(v.stage)&&/^0x[a-fA-F0-9]{64}$/.test(v.hash))
-    txProgress(v.stage,String(v.method||''),'Last transaction: '+String(v.detail||''),v.hash);
- }catch{}
+ dismissedHash='';
+ renderTxHistory();
 }
 
 function walletFeedback(message,tone='warning'){
@@ -292,6 +323,13 @@ $('connect').addEventListener('click',()=>{
 $('load').addEventListener('click',()=>run(refresh));
 $('resume').addEventListener('click',()=>run(verifyPending));
 $('txProgressResume').addEventListener('click',()=>run(verifyPending));
+$('txProgressDismiss').addEventListener('click',()=>{
+ // Dismiss only the notification, not the original hash or browser history.
+ const known=pendingTx?.hash||readTxHistory(localStorage,contract)[0]?.hash||'';
+ dismissedHash=known;
+ $('txProgress').hidden=true;
+});
+$('txHistoryRefresh').addEventListener('click',renderTxHistory);
 $('contract').addEventListener('change',()=>{
  contract=$('contract').value.trim();
  if(addressValid(contract))localStorage.setItem('canonatlas_address',contract);
@@ -299,6 +337,7 @@ $('contract').addEventListener('change',()=>{
  if(pendingTx){
   txProgress('unverified',pendingTx.method,'Stored transaction on this contract; use Resume verification.',pendingTx.hash);
  }else restoreLastTx();
+ renderTxHistory();
 });
 $('scene').addEventListener('input',()=>updateHash().catch(e=>log(e.message)));
 $('copyHash').addEventListener('click',()=>navigator.clipboard?.writeText($('sceneHash').textContent));
@@ -323,5 +362,6 @@ $('decline').addEventListener('click',()=>run(async()=>{
 render();updateHash().catch(e=>log(e.message));
 // Show accepted on-chain canon when available. Never synthesize an on-chain success.
 showPending();
+restoreLastTx();
 if(pendingTx)run(verifyPending);
-else{restoreLastTx();run(refresh);}
+else run(refresh);

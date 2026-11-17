@@ -92,3 +92,30 @@
 .tx-progress.is-unverified{border-color:#b59762;background:#34291df5}
 @media(max-width:680px){.tx-progress{top:4px;gap:8px;padding:9px 11px}
  .tx-progress-proof code{font-size:10px}}
+
+/* Dismissable status: terminal results are archived, not forced into the header forever. */
+.tx-progress-dismiss{flex:none;align-self:center;min-height:32px;min-width:32px;border:1px solid #665876;
+ border-radius:8px;background:transparent;color:#e8dcf6;font-size:21px;line-height:1;cursor:pointer}
+.tx-progress-dismiss:hover{background:#ffffff14}
+.tx-progress-dismiss:focus-visible{outline:2px solid #ddc2ff;outline-offset:2px}
+.tx-history-section{min-height:380px}
+.tx-history-section .section-head{gap:14px}
+.tx-history-notice{font-size:12px;color:#a99abb;line-height:1.55;margin:0 0 20px}
+.tx-history-list{display:grid;gap:12px}
+.tx-history-item{background:#171425;border:1px solid #393047;border-radius:10px;padding:15px 17px;
+ display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.tx-history-info{min-width:0;display:grid;gap:8px}
+.tx-history-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tx-history-state{font:800 10px/1.4 ui-monospace,monospace;border-radius:5px;
+ padding:5px 8px;border:1px solid #745d91;color:#e1cef9}
+.tx-history-state.is-success{color:#c9ffe1;border-color:#5e9a72}
+.tx-history-state.is-failed{color:#ffcacc;border-color:#bd6975}
+.tx-history-state.is-unverified,.tx-history-state.is-undetermined{color:#ffdfad;border-color:#aa8d5d}
+.tx-history-method{color:#f1e5ff;font-size:13px;font-weight:700}
+.tx-history-hash{font:11px/1.5 ui-monospace,monospace;color:#ccbadc;overflow-wrap:anywhere}
+.tx-history-detail{color:#a99dba;font-size:12px;line-height:1.55;overflow-wrap:anywhere}
+.tx-history-item a{font-size:11px;font-weight:700;color:#e4c1ff;text-decoration:underline;text-underline-offset:3px;
+ white-space:nowrap}
+.tx-history-empty{border:1px dashed #554366;border-radius:10px;padding:23px;
+ color:#a99cbb;font-size:12px}
+@media(max-width:700px){.tx-history-item{flex-direction:column}.tx-history-item a{align-self:flex-end}}
