@@ -19,6 +19,14 @@
 
 **Independent readback:** [`scripts/verify-live.mjs`](scripts/verify-live.mjs) validates deployment source and `LATEST_FINAL` world and entry state, 3 criterion references, original and upgraded canon digests, signer independence and steward ratification. [Successful CI](https://github.com/bearbaba/CANONATLAS/actions/runs/43853942589). The story and rules are original fictional demonstration data; no copyright ownership or general AI accuracy is certified.
 
+## Reviewer-facing website and wallet lifecycle
+
+The deployed GenLayer Studionet contract is selected automatically when [the CANONATLAS website](https://canonatlas.vercel.app) loads. On a live `LATEST_FINAL` read, the visitor sees **World #1**, its ratified **canon version 2**, the status of **Entry #1**, and the **literal evidence/reference IDs** behind GenLayer's three AI judgments. These are read-only, independently finalized records, not a simulated AI verdict.
+
+For a new world, the connected Steward creates the canon; a **different wallet** proposes a story and requests independent AI consensus; only the original Steward may ratify a consistent proposal. The application waits for **FINALIZED / successful execution / accepted consensus**, reads the new on-chain state and verifies the signer/entry before showing success. Browser refreshes and RPC timeouts preserve the transaction hash. The visitor can resume checking the same hash without submitting a duplicate signature; wallet/chain switches revoke signing authorization.
+
+**Verification boundary:** Historical accepted and signed contract actions listed below were initiated through GenLayer Studio. Frontend flow tests use a simulated wallet; they are not a recording of a real user signing through the production site. A live browser wallet-signing walkthrough and a genuine screen capture remain necessary before claiming that final end-to-end demonstration.
+
 ## The product that makes this different
 
 Imagine a writers' room where five people are contributing to an original universe. A new chapter says a traveler crosses an impassable sea using a mirror. Was that already forbidden by world rules? Did it happen before a referenced event? Does it contradict an established character arc?
