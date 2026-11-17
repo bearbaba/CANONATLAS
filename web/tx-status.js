@@ -8,7 +8,7 @@ const named=(kind,raw)=>{
  const k=key(raw);
  const opts={
   status:{'7':'FINALIZED','8':'CANCELED','FINALIZED':'FINALIZED','CANCELED':'CANCELED',
-   '5':'ACCEPTED','ACCEPTED':'ACCEPTED'},
+   '5':'ACCEPTED','ACCEPTED':'ACCEPTED', '6':'UNDETERMINED','UNDETERMINED':'UNDETERMINED'},
   execution:{'1':'FINISHED_WITH_RETURN','2':'FINISHED_WITH_ERROR',
    'FINISHEDWITHRETURN':'FINISHED_WITH_RETURN','RETURN':'FINISHED_WITH_RETURN',
    'SUCCESS':'FINISHED_WITH_RETURN','FINISHEDWITHERROR':'FINISHED_WITH_ERROR',
@@ -19,7 +19,7 @@ const named=(kind,raw)=>{
    'MAJORITYDISAGREE':'MAJORITY_DISAGREE','3':'TIMEOUT',
    'TIMEOUT':'TIMEOUT','4':'DETERMINISTIC_VIOLATION',
    'DETERMINISTICVIOLATION':'DETERMINISTIC_VIOLATION','5':'NO_MAJORITY',
-   'NOMAJORITY':'NO_MAJORITY'}
+   'NOMAJORITY':'NO_MAJORITY','UNDETERMINED':'NO_MAJORITY'}
  };
  return opts[kind][k]??(k?String(raw).toUpperCase():'UNKNOWN');
 };
@@ -63,4 +63,18 @@ export function normalizePendingTx(value,address){
   if(entryId!=null&&(!Number.isSafeInteger(entryId)||entryId<=0))return null;
   if(typeof signer!=='string'||!addressPattern.test(signer))return null;
   return {hash:value.hash,method:value.method,contract:address,worldId:worldId??null,entryId:entryId??null,signer:signer.toLowerCase()};
+}
+
+/** A finalized no-majority decision did not authorize a contract state change.
+ * It may contain a successful leader execution; that does not make it accepted. */
+export const isUndeterminedFinal=check=>Boolean(check?.finalized&&check?.consensus==='NO_MAJORITY');
+/** Select only truly finalized receipts; ignore older SDK/indexer states.
+ * Never combine conflicting terminal receipts into false certainty. */
+export function reconcileReceiptSnapshots(checks){
+ const observations=(Array.isArray(checks)?checks:[]).filter(Boolean);
+ const finals=observations.filter(x=>x.finalized);
+ const canceled=observations.find(x=>x.status==='CANCELED');
+ if(finals.length&&canceled)throw Error('Conflicting terminal transaction states; retain hash.');
+ if(finals.length)return finals.slice(1).reduce((a,b)=>combineFinalChecks(a,b),finals[0]);
+ return canceled||observations[0]||finalReceipt(null);
 }

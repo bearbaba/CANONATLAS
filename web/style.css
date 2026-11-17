@@ -119,3 +119,7 @@
 .tx-history-empty{border:1px dashed #554366;border-radius:10px;padding:23px;
  color:#a99cbb;font-size:12px}
 @media(max-width:700px){.tx-history-item{flex-direction:column}.tx-history-item a{align-self:flex-end}}
+
+/* A finalized validator no-majority is terminal, but not a successful AI verdict. */
+.tx-progress.is-undetermined{border-color:#b79653;background:#33291ff5}
+.tx-progress.is-undetermined .tx-progress-text strong{color:#ffe2a3}

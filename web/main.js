@@ -1,5 +1,5 @@
 import {connectWallet,disconnectWallet,subscribeWalletChanges,read,write,waitForFinalized,getTransactionState,getConsensusReceipt,explorer} from './chain.js';
-import {finalReceipt,combineFinalChecks,normalizePendingTx} from './tx-status.js';
+import {finalReceipt,normalizePendingTx,reconcileReceiptSnapshots,isUndeterminedFinal} from './tx-status.js';
 import {addressValid,validWorld,validEntry,actionGates} from './safety.js';
 import {readTxHistory,upsertTxHistory,migrateLegacyTx} from './history.js';
 const $=id=>document.getElementById(id);
@@ -65,7 +65,7 @@ function renderTxHistory(){
 function txProgress(stage,method='',detail='',transactionHash=''){
  const labels={signing:'AWAITING WALLET SIGNATURE',submitted:'TRANSACTION SUBMITTED',
   consensus:'GENLAYER CONSENSUS',readback:'VERIFYING LATEST_FINAL',success:'SUCCESS',
-  failed:'FAILED',unverified:'UNVERIFIED'};
+  failed:'FAILED',undetermined:'FINALIZED · UNDETERMINED',unverified:'UNVERIFIED'};
  const hash=transactionHash||pendingTx?.hash||'';
  const verifiedHash=/^0x[a-fA-F0-9]{64}$/.test(hash)?hash:'';
  const root=$('txProgress');
@@ -84,7 +84,7 @@ function txProgress(stage,method='',detail='',transactionHash=''){
      ['signing','submitted','consensus','readback'].includes(stage)&&method===methodName);
  }
  // Record observed statuses in a browser-local audit trail. No chain state is modified.
- if(verifiedHash&&method&&['submitted','consensus','readback','unverified','success','failed'].includes(stage)){
+ if(verifiedHash&&method&&['submitted','consensus','readback','unverified','success','failed','undetermined'].includes(stage)){
   upsertTxHistory(localStorage,contract,{stage,method,detail,hash:verifiedHash});
   renderTxHistory();
  }
@@ -218,26 +218,39 @@ async function sign(method,args){if(!actor)throw Error('Connect a Studionet wall
  txProgress('submitted',method,'Transaction hash saved. Awaiting GenLayer finality.');
  log('TRANSACTION SUBMITTED · waiting for FINALIZED\n'+hash+
    '\nNo second wallet signature will be requested while this hash is unresolved.');
- await verifyPending();
+ await verifyPending({wait:true});
 }
-/** A submitted hash survives refreshes and RPC timeouts. Never resubmit automatically. */
-async function verifyPending(){
+/** Query by original transaction hash first, avoiding SDK polling cached Committing.
+ * The canonical receipt verifies its hash; a stale nonfinal SDK snapshot cannot
+ * override a FINALIZED consensus receipt. Never sign or broadcast here. */
+async function inspectReceiptNow(hash){
+ const observations=[],errors=[];
+ for(const reader of [getConsensusReceipt,getTransactionState]){
+  try{observations.push(finalReceipt(await reader(hash)));}
+  catch(e){errors.push(String(e.message||e));}
+ }
+ if(!observations.length)throw Error('No independent receipt available: '+errors.join(' / '));
+ return reconcileReceiptSnapshots(observations);
+}
+/** Resume and page load perform an immediate read-only receipt check. Only the
+ * *newly submitted* transaction enters SDK finality polling. */
+async function verifyPending({wait=false}={}){
  if(!pendingTx)throw Error('No pending transaction hash is stored.');
  const record=pendingTx;showPending();
- txProgress('consensus',record.method,'Confirming the original transaction; do not sign twice.');
- log('VERIFYING STORED TX · '+record.method+'\n'+record.hash+'\nWaiting for finality and on-chain readback.');
+ txProgress('consensus',record.method,'Checking the original hash directly against GenLayer; no new signature.');
+ log('VERIFYING STORED TX · '+record.method+'\n'+record.hash+'\nChecking canonical receipt and LATEST_FINAL.');
  try{
-   let receipt=await waitForFinalized(record.hash);
-   let check=finalReceipt(receipt);
-   if(check.finalized&&(check.execution==='UNKNOWN'||check.consensus==='UNKNOWN')){
-     for(const reader of [getTransactionState,getConsensusReceipt]){
-       if(check.execution!=='UNKNOWN'&&check.consensus!=='UNKNOWN')break;
-       try{check=combineFinalChecks(check,finalReceipt(await reader(record.hash)));}
-       catch(e){
-        if(String(e.message||e).startsWith('Conflicting '))throw e;
-        // Keep ambiguous outcomes unverified; never infer success.
-       }
-     }
+   let check=await inspectReceiptNow(record.hash);
+   if(!check.finalized&&check.status!=='CANCELED'&&wait){
+     // A fresh write can still be in consensus. Waiting is only used here;
+     // SDK timeout must not override an already-finalized canonical receipt.
+     try{
+       const waited=finalReceipt(await waitForFinalized(record.hash));
+       check=reconcileReceiptSnapshots([check,waited]);
+     }catch{}
+     // A final check after an SDK timeout handles lagging indexers/status=3.
+     const latest=await inspectReceiptNow(record.hash);
+     check=reconcileReceiptSnapshots([check,latest]);
    }
    if(check.status==='CANCELED'){
      savePending(null);showPending();
@@ -245,8 +258,26 @@ async function verifyPending(){
      log('CANCELED · NO SUCCESSFUL EXECUTION\n'+record.hash);
      return;
    }
-   if(!check.finalized)throw Error('Transaction has not reached FINALIZED status.');
-   txProgress('readback',record.method,'Finalized. Checking execution and persisted world state.');
+   if(!check.finalized){
+     throw Error('No FINALIZED receipt found yet. Last observed: '+check.status+'. Use Resume later; no new signature.');
+   }
+   txProgress('readback',record.method,'FINALIZED receipt found. Checking consensus outcome.');
+   if(isUndeterminedFinal(check)){
+     // A committed NoMajority result is terminal but never an accepted
+     // assessment: even a successful leader GenVM execution is not canon.
+     savePending(null);showPending();
+     let readback='Entry state can be checked under World ID / Entry ID in console.';
+     try{
+       await refresh();
+       readback='World #'+(world?.id??'—')+' · Entry '+(entry?.id??'—')+
+         ' '+(entry?.status??'not selected')+' at LATEST_FINAL.';
+     }catch{}
+     const explanation='FINALIZED · UNDETERMINED / NO_MAJORITY. Validator consensus did not accept the leader output. '+readback;
+     txProgress('undetermined',record.method,explanation,record.hash);
+     log('FINALIZED / UNDETERMINED · '+record.hash+'\n'+explanation+
+       '\nTX archived in History; old pending lock cleared. No duplicate signature.');
+     return;
+   }
    if(!check.success){
      if(check.execution==='UNKNOWN'||check.consensus==='UNKNOWN')
        throw Error('Receipt fields are incomplete. Use Explorer; keep this hash for readback.');
