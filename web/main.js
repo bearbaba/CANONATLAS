@@ -151,7 +151,7 @@ async function verifyPending(){
    await refresh();
    if(record.worldId!=null&&record.method!=='create_world'&&world?.id!==record.worldId)
      throw Error('Selected world does not match the transaction world ID.');
-   if(record.entryId!=null&&record.method!=='propose_entry'&&entry?.id!==record.entryId)
+   if(record.entryId!=null&&!['propose_entry','create_world'].includes(record.method)&&entry?.id!==record.entryId)
      throw Error('Selected entry does not match the transaction entry ID.');
    const expected={
      create_world:!!world&&world.owner.toLowerCase()===record.signer,
