@@ -175,7 +175,7 @@ async function updateHash(){const data=new TextEncoder().encode($('scene').value
 }
 async function refresh(){contract=$('contract').value.trim();if(!addressValid(contract))throw Error('Enter a valid deployed contract address.');
  const stats=await read(contract,'stats');
- if(stats.name!=='CANONATLAS'||stats.version!=='1.0.0'||stats.citation_mode!=='DETERMINISTIC_REFERENCE_IDS')throw Error('Contract name, version or citation policy mismatch. Signing disabled.');
+ if(stats.name!=='CANONATLAS'||!['1.0.0','1.1.0'].includes(stats.version)||stats.citation_mode!=='DETERMINISTIC_REFERENCE_IDS')throw Error('Contract name, version or citation policy mismatch. Signing disabled.');
  const id=Number($('worldId').value);
  if(!Number.isSafeInteger(id)||id<1){world=null;entry=null;log('Contract verified. No world selected yet. Create a world with the steward wallet.');setMode(true);return}
  try{const w=await read(contract,'get_world',[id]);if(!validWorld(w))throw Error('Malformed latest-final world state');world=w;}
