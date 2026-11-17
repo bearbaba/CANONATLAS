@@ -19,9 +19,12 @@ function element(){return {value:'',textContent:'',innerHTML:'',disabled:false,h
  className:'',style:{},classList:{add(){},remove(){},toggle(){}},href:'',title:'',
  handlers:{},children:[],addEventListener(name,fn){this.handlers[name]=fn},
  replaceChildren(...v){this.children=v},append(...v){this.children.push(...v)}}}
-function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntry,entryExists=true,connectError=null,approvalGate=null,undetermined=false,staleSdk=false}={}){
+function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntry,entryExists=true,connectError=null,approvalGate=null,undetermined=false,staleSdk=false,disagreed=false,archivedFailed=false}={}){
  const nodes=new Map(),events={},writes=[],storage=new Map();
  let disconnectCount=0;
+ if(archivedFailed)upsertTxHistory({getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v)},CONTRACT,{
+  hash:HASH,method:'assess_entry',stage:'failed',
+  detail:'FINALIZED · unsuccessful execution or consensus: FINISHED_WITH_ERROR / MAJORITY_DISAGREE'});
  const initial={worldId:'1',entryId:'1',worldTitle:'The Glass Archipelago',
    premise:'A sea-bound world of original imaginary characters.',
    scene:'In year 166, Mira studied a memory mirror while nobody crossed the Quiet Sea.',
@@ -48,7 +51,7 @@ function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntr
   write:async(_addr,_signer,method,args)=>{if(approvalGate)await approvalGate;writes.push({method,args});
    if(method==='ratify_entry'){entry={...entry,status:'RATIFIED'};world={...world,canon_version:2,
       pending_entry:0,ratified_entries:[1],canon:[...RULES,{id:'ENTRY_1',kind:'continuity',text:entry.scene}]};}
-   else if(method==='assess_entry'&&!undetermined){entry={...entry,status:'CONSISTENT',assessment_runs:1};}
+   else if(method==='assess_entry'&&!undetermined&&!disagreed){entry={...entry,status:'CONSISTENT',assessment_runs:1};}
    else if(method==='create_world'){
     worldsCount+=1;world={...world,id:worldsCount,owner:actor,canon_version:1,
       canon:RULES,pending_entry:0,ratified_entries:[]};
@@ -61,13 +64,13 @@ function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntr
    else if(method==='decline_entry'){entry={...entry,status:'DECLINED'};world={...world,pending_entry:0};}
    return HASH},
   waitForFinalized:async()=>{if(shouldTimeout||staleSdk)throw Error('temporary remote RPC timeout');
-    return {statusName:'FINALIZED',resultName:undetermined?'NO_MAJORITY':'MAJORITY_AGREE',
-      txExecutionResultName:'FINISHED_WITH_RETURN'}},
+    return {statusName:'FINALIZED',resultName:undetermined?'NO_MAJORITY':disagreed?'MAJORITY_DISAGREE':'MAJORITY_AGREE',
+      txExecutionResultName:disagreed?'FINISHED_WITH_ERROR':'FINISHED_WITH_RETURN'}},
   getTransactionState:async()=>shouldTimeout||staleSdk?{statusName:'COMMITTING',status:3}:
-    {statusName:'FINALIZED',resultName:undetermined?'NO_MAJORITY':'MAJORITY_AGREE',
-      txExecutionResultName:'FINISHED_WITH_RETURN'},
+    {statusName:'FINALIZED',resultName:undetermined?'NO_MAJORITY':disagreed?'MAJORITY_DISAGREE':'MAJORITY_AGREE',
+      txExecutionResultName:disagreed?'FINISHED_WITH_ERROR':'FINISHED_WITH_RETURN'},
   getConsensusReceipt:async()=>shouldTimeout&&!staleSdk?{id:HASH,status:3,result:0,txExecutionResult:0}:
-    {id:HASH,status:7,result:undetermined?5:6,txExecutionResult:1},
+    {id:HASH,status:7,result:undetermined?5:disagreed?2:6,txExecutionResult:disagreed?2:1},
   explorer:hash=>'https://explorer-studio.genlayer.com/tx/'+hash
  };
  const code=readFileSync(new URL('../web/main.js',import.meta.url),'utf8')
@@ -378,4 +381,37 @@ test('unfinalized SDK and canonical snapshots must retain pending and never clai
  assert.equal(h.storage.has('canonatlas_pending_'+CONTRACT.toLowerCase()),true);
  assert.equal(h.$('assess').disabled,true);
  assert.equal(h.writes.length,1);
+});
+
+test('FINALIZED MajorityDisagree + FinishedWithError never mislabels AI as failed wallet or committed verdict',async()=>{
+ const h=harness({actor:AUTHOR,entryStatus:'SUBMITTED',disagreed:true});
+ await flush();await h.click('connect');await h.click('assess');
+ assert.equal(h.$('txProgressLabel').textContent,'FINALIZED · UNDETERMINED');
+ assert.match(h.$('txProgressDetail').textContent,/MAJORITY_DISAGREE/);
+ assert.match(h.$('txProgressDetail').textContent,/FINISHED_WITH_ERROR/);
+ assert.equal(h.$('entryStatus').textContent,'SUBMITTED');
+ assert.equal(h.$('txBox').hidden,true);
+ assert.equal(h.writes.length,1,'never retries signature');
+ const records=readTxHistory({getItem:k=>h.storage.get(k)||null},CONTRACT);
+ assert.equal(records.length,1);
+ assert.equal(records[0].stage,'undetermined');
+ assert.equal(h.storage.has('canonatlas_pending_'+CONTRACT.toLowerCase()),false);
+});
+test('old archived FAILED vote is automatically reconciled from canonical receipt after reload',async()=>{
+ const h=harness({actor:AUTHOR,entryStatus:'SUBMITTED',disagreed:true,archivedFailed:true});
+ await flush();await flush();await flush();
+ const history=readTxHistory({getItem:k=>h.storage.get(k)||null},CONTRACT);
+ assert.equal(history.length,1);
+ assert.equal(history[0].stage,'undetermined');
+ assert.match(history[0].detail,/MAJORITY_DISAGREE/);
+ assert.equal(h.$('txProgress').hidden,true,'history repair does not recreate sticky banner');
+ assert.equal(h.writes.length,0,'repair is read-only');
+});
+test('finalized disagreed vote is not NoMajority, but both are unaccepted canon results',()=>{
+ const disagreed=finalReceipt({status:7,result:2,txExecutionResult:2});
+ assert.equal(disagreed.consensus,'MAJORITY_DISAGREE');
+ assert.equal(disagreed.execution,'FINISHED_WITH_ERROR');
+ assert.equal(disagreed.success,false);
+ assert.equal(isUndeterminedFinal(disagreed),true);
+ assert.equal(isUndeterminedFinal(finalReceipt({status:7,result:1,txExecutionResult:1})),false);
 });
