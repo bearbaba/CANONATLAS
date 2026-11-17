@@ -18,7 +18,7 @@ function element(){return {value:'',textContent:'',innerHTML:'',disabled:false,h
  className:'',style:{},classList:{add(){},remove(){},toggle(){}},href:'',title:'',
  handlers:{},children:[],addEventListener(name,fn){this.handlers[name]=fn},
  replaceChildren(...v){this.children=v},append(...v){this.children.push(...v)}}}
-function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntry,entryExists=true}={}){
+function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntry,entryExists=true,connectError=null}={}){
  const nodes=new Map(),events={},writes=[],storage=new Map();
  const initial={worldId:'1',entryId:'1',worldTitle:'The Glass Archipelago',
    premise:'A sea-bound world of original imaginary characters.',
@@ -36,7 +36,10 @@ function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntr
    ]}}:null;
  let shouldTimeout=timeout;
  const deps={
-  connectWallet:async()=>actor,
+  connectWallet:async()=>{if(connectError)throw connectError;return actor},
+  subscribeWalletChanges:({onAccountsChanged,onChainChanged})=>{
+   events.accountsChanged=onAccountsChanged;events.chainChanged=onChainChanged;return ()=>{};
+  },
   read:async(_addr,method)=>method==='stats'?{name:'CANONATLAS',version:'1.0.0',citation_mode:'DETERMINISTIC_REFERENCE_IDS',worlds:worldsCount,entries:entriesCount}:
     method==='get_world'?structuredClone(world):structuredClone(entry),
   write:async(_addr,_signer,method,args)=>{writes.push({method,args});
@@ -62,7 +65,7 @@ function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntr
  };
  const code=readFileSync(new URL('../web/main.js',import.meta.url),'utf8')
   .replace(/^import .*;\s*$/gm,'');
- const imports=`const {connectWallet,read,write,waitForFinalized,getTransactionState,explorer}=globalThis.deps;
+ const imports=`const {connectWallet,subscribeWalletChanges,read,write,waitForFinalized,getTransactionState,explorer}=globalThis.deps;
 const {finalReceipt,normalizePendingTx}=globalThis.tx;
 const {addressValid,validWorld,validEntry,actionGates}=globalThis.safety;`;
  runInNewContext(imports+code,{
@@ -169,4 +172,21 @@ test('only original author can request initial independent AI review of a submit
  const owner=harness({actor:OWNER,entryStatus:'SUBMITTED'});
  await flush();await owner.click('connect');
  assert.equal(owner.$('assess').disabled,true);
+});
+
+test('wallet failures are visible on Overview without opening the GenLayer console',async()=>{
+ const h=harness({connectError:new Error('No browser wallet was detected')});
+ await flush();await h.click('connect');
+ assert.equal(h.$('walletAlert').hidden,false);
+ assert.equal(h.$('walletAlert').className,'wallet-alert is-error');
+ assert.match(h.$('walletAlert').textContent,/No browser wallet was detected/);
+ assert.equal(h.$('connect').textContent,'Connect wallet ↗');
+});
+test('wallet success and network change are reported in the currently visible tab',async()=>{
+ const h=harness({actor:OWNER});await flush();await h.click('connect');
+ assert.equal(h.$('walletAlert').className,'wallet-alert is-success');
+ assert.match(h.$('walletAlert').textContent,/Studionet \(61999\)/);
+ h.events.chainChanged('0x1');
+ assert.equal(h.$('ratify').disabled,true);
+ assert.equal(h.$('walletAlert').className,'wallet-alert is-warning');
 });
