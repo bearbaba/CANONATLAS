@@ -39,8 +39,8 @@ function txProgress(stage,method='',detail='',transactionHash=''){
  const hash=transactionHash||pendingTx?.hash||'';
  const verifiedHash=/^0x[a-fA-F0-9]{64}$/.test(hash)?hash:'';
  const root=$('txProgress');root.hidden=false;root.className='tx-progress is-'+stage;
- $('txProgressLabel').textContent=(labels[stage]||'PROCESSING')+(method?' · '+method.replaceAll('_',' '):'');
- $('txProgressDetail').textContent=detail;
+ $('txProgressLabel').textContent=labels[stage]||'PROCESSING';
+ $('txProgressDetail').textContent=(method?method.replaceAll('_',' ')+' · ':'')+detail;
  $('txProgressSpinner').hidden=!['signing','submitted','consensus','readback'].includes(stage);
  $('txProgressProof').hidden=!verifiedHash;
  $('txProgressHash').textContent=verifiedHash?verifiedHash.slice(0,12)+'…'+verifiedHash.slice(-10):'';

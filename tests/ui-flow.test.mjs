@@ -279,7 +279,7 @@ test('transaction widget is global, outside tab-specific workspaces, with a real
 });
 test('verified finalized write shows explicit SUCCESS, visible TX hash and Explorer link on any screen',async()=>{
  const h=harness();await flush();await h.click('connect');await h.click('ratify');
- assert.equal(h.$('txProgressLabel').textContent,'SUCCESS · ratify entry');
+ assert.equal(h.$('txProgressLabel').textContent,'SUCCESS');
  assert.equal(h.$('txProgressProof').hidden,false);
  assert.match(h.$('txProgressHash').textContent,/0xfffffffff/);
  assert.equal(h.$('txProgressLink').href,'https://explorer-studio.genlayer.com/tx/'+HASH);
@@ -290,11 +290,11 @@ test('uncertain outcome still shows TX Explorer link and one-click resume',async
  const h=harness({timeout:true});await flush();await h.click('connect');await h.click('ratify');
  assert.equal(h.$('txProgressProof').hidden,false);
  assert.equal(h.$('txProgressLink').href,'https://explorer-studio.genlayer.com/tx/'+HASH);
- assert.equal(h.$('txProgressLabel').textContent,'UNVERIFIED · ratify entry');
+ assert.equal(h.$('txProgressLabel').textContent,'UNVERIFIED');
  assert.equal(h.$('txProgressResume').hidden,false);
  assert.equal(h.writes.length,1);
  h.timeout=false;await h.click('txProgressResume');
- assert.equal(h.$('txProgressLabel').textContent,'SUCCESS · ratify entry');
+ assert.equal(h.$('txProgressLabel').textContent,'SUCCESS');
  assert.equal(h.$('txProgressLink').href,'https://explorer-studio.genlayer.com/tx/'+HASH);
  assert.equal(h.writes.length,1,'resume must never re-submit');
 });
