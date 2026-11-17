@@ -65,9 +65,13 @@ export function normalizePendingTx(value,address){
   return {hash:value.hash,method:value.method,contract:address,worldId:worldId??null,entryId:entryId??null,signer:signer.toLowerCase()};
 }
 
-/** A finalized no-majority decision did not authorize a contract state change.
- * It may contain a successful leader execution; that does not make it accepted. */
-export const isUndeterminedFinal=check=>Boolean(check?.finalized&&check?.consensus==='NO_MAJORITY');
+/** A finalized, non-accepted consensus outcome cannot commit the leader's
+ * AI judgment. MajorityDisagree is a vote result, not a verdict of "CONFLICT";
+ * when the transaction finalizes without acceptance it is shown as unresolved
+ * canon/undetermined instead of misleading users with generic wallet FAILED.
+ * Keep the actual raw vote and execution names visible for diagnosis. */
+export const isUndeterminedFinal=check=>Boolean(check?.finalized&&
+ ['NO_MAJORITY','MAJORITY_DISAGREE'].includes(check?.consensus));
 /** Select only truly finalized receipts; ignore older SDK/indexer states.
  * Never combine conflicting terminal receipts into false certainty. */
 export function reconcileReceiptSnapshots(checks){

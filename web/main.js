@@ -232,6 +232,30 @@ async function inspectReceiptNow(hash){
  if(!observations.length)throw Error('No independent receipt available: '+errors.join(' / '));
  return reconcileReceiptSnapshots(observations);
 }
+
+/** Repair the previous release's archived FAILED labels using the exact
+ * original receipt, not hardcoded transaction hashes or assumptions from text.
+ * A history check never opens a wallet, submits a write, or revives the banner. */
+async function reconcileArchivedOutcomes(){
+ const boundContract=contract;
+ const candidates=readTxHistory(localStorage,boundContract).filter(item=>
+  item.stage==='failed'&&item.detail.includes('FINALIZED')).slice(0,3);
+ for(const item of candidates){
+  try{
+   const check=await inspectReceiptNow(item.hash);
+   if(boundContract!==contract)return;
+   if(isUndeterminedFinal(check)){
+    upsertTxHistory(localStorage,boundContract,{hash:item.hash,method:item.method,
+     stage:'undetermined',
+     detail:'FINALIZED · UNDETERMINED; no accepted consensus. Receipt vote: '+
+       check.consensus+'; execution: '+check.execution+'. No canon decision committed.'});
+    renderTxHistory();
+   }
+  }catch{
+   // A failed read does not turn archived evidence into success or erase it.
+  }
+ }
+}
 /** Resume and page load perform an immediate read-only receipt check. Only the
  * *newly submitted* transaction enters SDK finality polling. */
 async function verifyPending({wait=false}={}){
@@ -263,8 +287,8 @@ async function verifyPending({wait=false}={}){
    }
    txProgress('readback',record.method,'FINALIZED receipt found. Checking consensus outcome.');
    if(isUndeterminedFinal(check)){
-     // A committed NoMajority result is terminal but never an accepted
-     // assessment: even a successful leader GenVM execution is not canon.
+     // MajorityDisagree and NoMajority are distinct vote results, but neither
+     // is accepted: an exhausted finalized assessment cannot change canon.
      savePending(null);showPending();
      let readback='Entry state can be checked under World ID / Entry ID in console.';
      try{
@@ -272,7 +296,8 @@ async function verifyPending({wait=false}={}){
        readback='World #'+(world?.id??'—')+' · Entry '+(entry?.id??'—')+
          ' '+(entry?.status??'not selected')+' at LATEST_FINAL.';
      }catch{}
-     const explanation='FINALIZED · UNDETERMINED / NO_MAJORITY. Validator consensus did not accept the leader output. '+readback;
+     const explanation='FINALIZED · UNDETERMINED (no accepted consensus). Receipt vote: '+
+       check.consensus+'; execution: '+check.execution+'. No AI verdict was committed. '+readback;
      txProgress('undetermined',record.method,explanation,record.hash);
      log('FINALIZED / UNDETERMINED · '+record.hash+'\n'+explanation+
        '\nTX archived in History; old pending lock cleared. No duplicate signature.');
@@ -367,7 +392,10 @@ $('contract').addEventListener('change',()=>{
  world=null;entry=null;pendingTx=loadPending(contract);setMode(false);render();
  if(pendingTx){
   txProgress('unverified',pendingTx.method,'Stored transaction on this contract; use Resume verification.',pendingTx.hash);
- }else restoreLastTx();
+ }else{
+  restoreLastTx();
+  void reconcileArchivedOutcomes();
+ }
  renderTxHistory();
 });
 $('scene').addEventListener('input',()=>updateHash().catch(e=>log(e.message)));
@@ -395,4 +423,7 @@ render();updateHash().catch(e=>log(e.message));
 showPending();
 restoreLastTx();
 if(pendingTx)run(verifyPending);
-else run(refresh);
+else{
+ run(refresh);
+ void reconcileArchivedOutcomes();
+}
