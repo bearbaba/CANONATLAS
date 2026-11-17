@@ -34,3 +34,10 @@
  .workspace-ready .topline{padding:12px 0}
 }
 @media(prefers-reduced-motion:reduce){.workspace-tab{transition:none}}
+
+/* Visible wallet feedback in every workspace view. */
+.wallet-alert{position:relative;z-index:20;margin:12px 0 4px;padding:12px 15px;border:1px solid #756197;border-radius:9px;font-size:12px;font-weight:600;line-height:1.55;background:#1d1830;color:#eee1ff;white-space:pre-line;overflow-wrap:anywhere}
+.wallet-alert[hidden]{display:none!important}
+.wallet-alert.is-warning{border-color:#a48b57;background:#2e251b;color:#fbe9be}
+.wallet-alert.is-error{border-color:#ae6678;background:#301a2b;color:#ffe2ea}
+.wallet-alert.is-success{border-color:#689c84;background:#18332c;color:#d8ffea}

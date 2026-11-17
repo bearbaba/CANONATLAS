@@ -1,4 +1,4 @@
-import {connectWallet,read,write,waitForFinalized,getTransactionState,explorer} from './chain.js';
+import {connectWallet,subscribeWalletChanges,read,write,waitForFinalized,getTransactionState,explorer} from './chain.js';
 import {finalReceipt,normalizePendingTx} from './tx-status.js';
 import {addressValid,validWorld,validEntry,actionGates} from './safety.js';
 const $=id=>document.getElementById(id);
@@ -29,6 +29,10 @@ function showPending(){
 }
 $('contract').value=contract;$('rules').value=JSON.stringify(EXAMPLE_RULES,null,2);
 function log(text){$('log').textContent=text}
+function walletFeedback(message,tone='warning'){
+ const node=$('walletAlert');node.hidden=false;node.className='wallet-alert is-'+tone;
+ node.textContent=message;
+}
 function setMode(live){$('mode').textContent=live?'LATEST_FINAL · LIVE':'ILLUSTRATIVE PREVIEW';$('mode').classList.toggle('connected',!!live)}
 const short=s=>s?`${s.slice(0,8)}…${s.slice(-6)}`:'—';
 function renderRules(w){const parent=$('canonList');parent.replaceChildren();
@@ -106,7 +110,14 @@ async function refresh(){contract=$('contract').value.trim();if(!addressValid(co
  }
  setMode(true);log('LATEST_FINAL VERIFIED\nContract '+short(contract)+'\nWorld #'+world.id+' / canon v'+world.canon_version+'\nPending: '+(world.pending_entry||'none')+'\nEntry: '+(entry?.status||'not selected')+'\nNo transaction is marked successful without a final-state readback.');
 }
-async function run(fn){if(busy)return;busy=true;render();try{await fn()}catch(e){log('ACTION BLOCKED / '+String(e.message||e))}finally{busy=false;render()}}
+async function run(fn,{wallet=false}={}){
+ if(busy){if(wallet)walletFeedback('Reading on-chain state. Try Connect wallet again after this read completes.','warning');return;}
+ busy=true;render();
+ try{await fn()}
+ catch(e){const message=String(e.message||e);log('ACTION BLOCKED / '+message);
+  if(wallet)walletFeedback(message+'\nStudio accounts do not automatically connect to an external website. Unlock a browser wallet extension for this domain.','error');
+ }finally{busy=false;render()}
+}
 async function sign(method,args){if(!actor)throw Error('Connect a Studionet wallet first');
  if(!addressValid(contract))throw Error('Contract address not configured');
  const gates=actionGates(world,entry,actor);
@@ -176,7 +187,16 @@ async function verifyPending(){
  }
 }
 
-$('connect').addEventListener('click',()=>run(async()=>{actor=await connectWallet();log('Connected '+actor+' on Studionet. Configure the deployed contract and verify latest-final state.');}));
+$('connect').addEventListener('click',()=>run(async()=>{
+ walletFeedback('Requesting wallet approval… Open the wallet extension to approve.','warning');
+ actor=await connectWallet();
+ subscribeWalletChanges({
+  onAccountsChanged:()=>{actor='';walletFeedback('Wallet account changed. Reconnect before signing.','warning');log('Wallet changed; reconnect before any new signature.');render();},
+  onChainChanged:()=>{actor='';walletFeedback('Wallet network changed. Reconnect to Studionet (61999).','warning');log('Network changed; reconnect before signing.');render();}
+ });
+ walletFeedback('Wallet connected: '+short(actor)+' · GenLayer Studionet (61999).','success');
+ log('Connected '+actor+' on Studionet. Configure the deployed contract and verify latest-final state.');
+},{wallet:true}));
 $('load').addEventListener('click',()=>run(refresh));
 $('resume').addEventListener('click',()=>run(verifyPending));
 $('contract').addEventListener('change',()=>{contract=$('contract').value.trim();if(addressValid(contract))localStorage.setItem('canonatlas_address',contract);world=null;entry=null;pendingTx=loadPending(contract);setMode(false);render()});
@@ -204,7 +224,3 @@ render();updateHash().catch(e=>log(e.message));
 // Show accepted on-chain canon when available. Never synthesize an on-chain success.
 showPending();
 run(refresh);
-if(window.ethereum?.on){
- window.ethereum.on('accountsChanged',()=>{actor='';log('Wallet changed; reconnect before any new signature.');render()});
- window.ethereum.on('chainChanged',()=>{actor='';log('Wallet network changed; switch to Studionet and reconnect.');render()});
-}
