@@ -1,4 +1,5 @@
-import {connectWallet,read,write,explorer} from './chain.js';
+import {connectWallet,read,write,waitForFinalized,getTransactionState,explorer} from './chain.js';
+import {finalReceipt,normalizePendingTx} from './tx-status.js';
 import {addressValid,validWorld,validEntry,actionGates} from './safety.js';
 const $=id=>document.getElementById(id);
 const EXAMPLE_RULES=[
@@ -11,6 +12,21 @@ const example={id:1,owner:'0x'+'a'.repeat(40),title:'The Glass Archipelago',
  canon:EXAMPLE_RULES,canon_version:1,canon_sha256:'',pending_entry:0,ratified_entries:[],closed_entries:[]};
 const labels={continuity:'Living continuity',chronology:'The timeline',world_rules:'Laws of the world'};
 let contract=localStorage.getItem('canonatlas_address')||'0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0',actor='',world=null,entry=null,busy=false;
+const pendingKey=address=>'canonatlas_pending_'+address.toLowerCase();
+function loadPending(address){
+ try{return normalizePendingTx(JSON.parse(localStorage.getItem(pendingKey(address))),address)}
+ catch{return null}
+}
+let pendingTx=loadPending(contract);
+function savePending(record){
+ pendingTx=record;
+ if(record)localStorage.setItem(pendingKey(contract),JSON.stringify(record));
+ else localStorage.removeItem(pendingKey(contract));
+}
+function showPending(){
+ if(!pendingTx)return;
+ $('txBox').hidden=false;$('txLink').href=explorer(pendingTx.hash);
+}
 $('contract').value=contract;$('rules').value=JSON.stringify(EXAMPLE_RULES,null,2);
 function log(text){$('log').textContent=text}
 function setMode(live){$('mode').textContent=live?'LATEST_FINAL · LIVE':'ILLUSTRATIVE PREVIEW';$('mode').classList.toggle('connected',!!live)}
@@ -36,8 +52,13 @@ function render(){const w=world||example;renderRules(w);
   entry.assessment.checks.map(c=>`${c.criterion.toUpperCase()} ${c.result}`).join(' · '):
   'A visual preview is not an AI verdict. Only accepted consensus committed to latest-final state is considered verified.';
  const gates=actor?actionGates(world,entry,actor):{};
- for(const action of ['create','propose','assess','ratify','decline'])$(action).disabled=busy||!contract||!actor||!gates[action];
+ for(const action of ['create','propose','assess','ratify','decline'])$(action).disabled=busy||!!pendingTx||!contract||!actor||!gates[action];
  $('load').disabled=busy||!contract;
+ $('resume').disabled=busy||!pendingTx;
+ $('contract').disabled=busy||!!pendingTx;
+ $('worldId').disabled=busy||!!pendingTx;
+ $('entryId').disabled=busy||!!pendingTx;
+ if(pendingTx)showPending();
  $('connect').textContent=actor?short(actor)+' ✓':'Connect wallet ↗';
 }
 async function updateHash(){const data=new TextEncoder().encode($('scene').value);
@@ -64,15 +85,75 @@ async function sign(method,args){if(!actor)throw Error('Connect a Studionet wall
  if(!addressValid(contract))throw Error('Contract address not configured');
  const gates=actionGates(world,entry,actor);
  const key={create_world:'create',propose_entry:'propose',assess_entry:'assess',ratify_entry:'ratify',decline_entry:'decline'}[method];
+ if(pendingTx)throw Error('Pending transaction hash exists. Resume its verification; never sign the same action twice.');
  if(method!=='create_world'&&!gates[key])throw Error('Current wallet or finalized state does not authorize '+method);
  log('Wallet signature requested for '+method+'. Inspect the transaction and then click Read latest-final.');
  const hash=await write(contract,actor,method,args);
- $('txBox').hidden=false;$('txLink').href=explorer(hash);
- log('TRANSACTION SUBMITTED (not yet finalized)\n'+hash+'\nOpen Explorer to check validator consensus; then use Read latest-final. Do not equate a leader result with accepted consensus.');
+ savePending({hash,method,contract,signer:actor,worldId:world?.id??null,entryId:entry?.id??null});
+ showPending();log('TRANSACTION SUBMITTED · waiting for FINALIZED\n'+hash+
+   '\nNo second wallet signature will be requested while this hash is unresolved.');
+ await verifyPending();
 }
+/** A submitted hash survives refreshes and RPC timeouts. Never resubmit automatically. */
+async function verifyPending(){
+ if(!pendingTx)throw Error('No pending transaction hash is stored.');
+ const record=pendingTx;showPending();
+ log('VERIFYING STORED TX · '+record.method+'\n'+record.hash+'\nWaiting for finality and on-chain readback.');
+ try{
+   let receipt=await waitForFinalized(record.hash);
+   let check=finalReceipt(receipt);
+   if(check.finalized&&!check.success&&check.consensus==='UNKNOWN'){
+     receipt=await getTransactionState(record.hash);
+     check=finalReceipt(receipt);
+   }
+   if(!check.finalized)throw Error('Transaction has not reached FINALIZED status.');
+   if(!check.success){
+     if(check.execution==='UNKNOWN'||check.consensus==='UNKNOWN')
+       throw Error('Receipt fields are incomplete. Use Explorer; keep this hash for readback.');
+     savePending(null);
+     log('FINALIZED BUT NOT SUCCESSFUL · '+check.execution+' / '+check.consensus+
+       '\n'+record.hash+'\nNo accepted state is claimed.');return;
+   }
+   if(record.method==='create_world'){
+     const stats=await read(contract,'stats');
+     if(Number.isSafeInteger(stats.worlds)&&stats.worlds>0)$('worldId').value=String(stats.worlds);
+     $('entryId').value='0';
+   }else if(record.method==='propose_entry'){
+     const stats=await read(contract,'stats');
+     if(Number.isSafeInteger(stats.entries)&&stats.entries>0)$('entryId').value=String(stats.entries);
+   }
+   await refresh();
+   if(record.worldId!=null&&record.method!=='create_world'&&world?.id!==record.worldId)
+     throw Error('Selected world does not match the transaction world ID.');
+   if(record.entryId!=null&&record.method!=='propose_entry'&&entry?.id!==record.entryId)
+     throw Error('Selected entry does not match the transaction entry ID.');
+   const expected={
+     create_world:!!world&&world.owner.toLowerCase()===record.signer,
+     propose_entry:!!entry&&entry.author.toLowerCase()===record.signer&&entry.world_id===world?.id,
+     assess_entry:!!entry&&entry.author.toLowerCase()===record.signer&&
+       ['CONSISTENT','CONFLICT','REVIEW','RATIFIED','DECLINED'].includes(entry.status),
+     ratify_entry:entry?.status==='RATIFIED'&&world?.owner?.toLowerCase()===record.signer&&
+       world?.ratified_entries?.includes(entry.id),
+     decline_entry:entry?.status==='DECLINED'&&world?.owner?.toLowerCase()===record.signer
+   };
+   if(!expected[record.method])
+     throw Error('The expected final result was not found in the selected latest-final world/entry.');
+   savePending(null);
+   log('VERIFIED · FINALIZED / FINISHED_WITH_RETURN / '+check.consensus+
+     '\nWorld #'+world.id+' · canon v'+world.canon_version+
+     '\nEntry '+(entry?.id||'none')+' · '+(entry?.status||'WORLD CREATED')+
+     '\nTransaction '+record.hash+'\nNo duplicate signature submitted.');
+ }catch(e){
+   log('PENDING HASH PRESERVED · '+record.hash+
+     '\nStatus not independently verified: '+String(e.message||e)+
+     '\nUse Resume verification or open Explorer. Do not blindly sign again.');
+ }
+}
+
 $('connect').addEventListener('click',()=>run(async()=>{actor=await connectWallet();log('Connected '+actor+' on Studionet. Configure the deployed contract and verify latest-final state.');}));
 $('load').addEventListener('click',()=>run(refresh));
-$('contract').addEventListener('change',()=>{contract=$('contract').value.trim();if(addressValid(contract))localStorage.setItem('canonatlas_address',contract);world=null;entry=null;setMode(false);render()});
+$('resume').addEventListener('click',()=>run(verifyPending));
+$('contract').addEventListener('change',()=>{contract=$('contract').value.trim();if(addressValid(contract))localStorage.setItem('canonatlas_address',contract);world=null;entry=null;pendingTx=loadPending(contract);setMode(false);render()});
 $('scene').addEventListener('input',()=>updateHash().catch(e=>log(e.message)));
 $('copyHash').addEventListener('click',()=>navigator.clipboard?.writeText($('sceneHash').textContent));
 $('create').addEventListener('click',()=>run(async()=>{
@@ -94,5 +175,10 @@ $('decline').addEventListener('click',()=>run(async()=>{
  await sign('decline_entry',[entry.id,reason]);
 }));
 render();updateHash().catch(e=>log(e.message));
-// Show accepted on-chain canon when available; failed reads remain preview and cannot authorize signatures.
+// Show accepted on-chain canon when available. Never synthesize an on-chain success.
+showPending();
 run(refresh);
+if(window.ethereum?.on){
+ window.ethereum.on('accountsChanged',()=>{actor='';log('Wallet changed; reconnect before any new signature.');render()});
+ window.ethereum.on('chainChanged',()=>{actor='';log('Wallet network changed; switch to Studionet and reconnect.');render()});
+}
