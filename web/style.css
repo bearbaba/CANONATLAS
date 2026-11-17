@@ -50,3 +50,25 @@
 .top-actions{gap:9px}
 @media(max-width:680px){.wallet-identity{font-size:10px;max-width:145px;padding:6px 8px}
  .top-actions{flex-wrap:wrap;justify-content:flex-end;gap:7px}}
+
+/* In-place wallet and consensus activity: visible during MetaMask approval, not a page-wide banner. */
+.tx-progress{display:flex;gap:11px;align-items:center;margin:0 0 12px;padding:11px 12px;
+ border:1px solid #725a99;background:#241d37;border-radius:9px}
+.tx-progress[hidden],.tx-progress-spinner[hidden]{display:none!important}
+.tx-progress-spinner{height:19px;width:19px;flex:none;box-sizing:border-box;border:2px solid #51446b;
+ border-top-color:#dcc4ff;border-radius:50%;animation:canon-wait .8s linear infinite}
+@keyframes canon-wait{to{transform:rotate(360deg)}}
+.tx-progress-text{min-width:0;display:flex;flex-direction:column;gap:3px}
+.tx-progress-text strong{color:#ebd9ff;font:700 11px/1.3 ui-monospace,monospace;letter-spacing:.05em}
+.tx-progress-text small{color:#c5b5d8;font-size:11px;line-height:1.45;overflow-wrap:anywhere}
+.tx-progress.is-success{border-color:#4e886c;background:#20372c}
+.tx-progress.is-success strong{color:#d7ffe7}
+.tx-progress.is-failed{border-color:#a56872;background:#39212d}
+.tx-progress.is-failed strong{color:#ffe1e6}
+.tx-progress.is-unverified{border-color:#b29767;background:#342a20}
+.tx-progress.is-unverified strong{color:#ffe3b6}
+.button.is-tx-loading{position:relative;gap:9px;cursor:progress}
+.button.is-tx-loading::before{content:"";display:inline-block;box-sizing:border-box;flex:none;
+ width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;
+ border-radius:50%;animation:canon-wait .8s linear infinite}
+@media(prefers-reduced-motion:reduce){.tx-progress-spinner,.button.is-tx-loading::before{animation-duration:2s}}
