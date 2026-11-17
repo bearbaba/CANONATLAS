@@ -267,3 +267,34 @@ test('public evidence and UI retain full result after completed write; no pendin
  assert.equal(h.$('txBox').hidden,true);
  assert.equal(h.$('walletAlert').hidden,true);
 });
+
+test('transaction widget is global, outside tab-specific workspaces, with a real Explorer link',()=>{
+ const html=readFileSync(new URL('../web/index.html',import.meta.url),'utf8');
+ const anchor=html.indexOf('id="txProgress"');
+ assert.ok(anchor>0);
+ assert.ok(anchor<html.indexOf('<nav class="workspace-tabs"'), 'status must be outside all hidden workspace tabs');
+ assert.ok(html.includes('id="txProgressProof"'));
+ assert.ok(html.includes('id="txProgressHash"'));
+ assert.ok(html.includes('id="txProgressLink"'));
+});
+test('verified finalized write shows explicit SUCCESS, visible TX hash and Explorer link on any screen',async()=>{
+ const h=harness();await flush();await h.click('connect');await h.click('ratify');
+ assert.equal(h.$('txProgressLabel').textContent,'SUCCESS · ratify entry');
+ assert.equal(h.$('txProgressProof').hidden,false);
+ assert.match(h.$('txProgressHash').textContent,/0xfffffffff/);
+ assert.equal(h.$('txProgressLink').href,'https://explorer-studio.genlayer.com/tx/'+HASH);
+ assert.equal(h.$('txProgressSpinner').hidden,true);
+ assert.equal(h.$('txProgressResume').hidden,true);
+});
+test('uncertain outcome still shows TX Explorer link and one-click resume',async()=>{
+ const h=harness({timeout:true});await flush();await h.click('connect');await h.click('ratify');
+ assert.equal(h.$('txProgressProof').hidden,false);
+ assert.equal(h.$('txProgressLink').href,'https://explorer-studio.genlayer.com/tx/'+HASH);
+ assert.equal(h.$('txProgressLabel').textContent,'UNVERIFIED · ratify entry');
+ assert.equal(h.$('txProgressResume').hidden,false);
+ assert.equal(h.writes.length,1);
+ h.timeout=false;await h.click('txProgressResume');
+ assert.equal(h.$('txProgressLabel').textContent,'SUCCESS · ratify entry');
+ assert.equal(h.$('txProgressLink').href,'https://explorer-studio.genlayer.com/tx/'+HASH);
+ assert.equal(h.writes.length,1,'resume must never re-submit');
+});

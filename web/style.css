@@ -72,3 +72,23 @@
  width:14px;height:14px;border:2px solid currentColor;border-right-color:transparent;
  border-radius:50%;animation:canon-wait .8s linear infinite}
 @media(prefers-reduced-motion:reduce){.tx-progress-spinner,.button.is-tx-loading::before{animation-duration:2s}}
+
+/* Transaction status in the shared layout, visible from every workspace screen.
+   Compact, unlike wallet-success banners; never hide TX proof after FINALIZED. */
+.tx-progress{position:sticky;top:8px;z-index:19;display:flex;flex-wrap:wrap;align-items:center;
+ gap:10px;margin:10px 0 6px;padding:10px 13px;background:#211c34f5;border:1px solid #76648f;
+ border-radius:9px;box-shadow:0 6px 24px #0005;backdrop-filter:blur(10px)}
+.tx-progress-text{flex:1 1 170px}
+.tx-progress-proof{display:flex;align-items:center;gap:11px;flex-wrap:wrap;min-width:0}
+.tx-progress-proof[hidden],.tx-progress-resume[hidden]{display:none!important}
+.tx-progress-proof code{font:700 11px/1.3 ui-monospace,monospace;color:#dbc8f4;
+ overflow-wrap:anywhere}
+.tx-progress-proof a{color:#ebcdff;font-size:11px;font-weight:800;text-decoration:underline;
+ text-underline-offset:3px;white-space:nowrap}
+.tx-progress-resume{color:#eacbff;font-size:11px;font-weight:700;padding:6px 10px;
+ border-radius:6px;border:1px solid #947aad;background:#392e50;cursor:pointer}
+.tx-progress.is-success{border-color:#609c77;background:#1a3329f5}
+.tx-progress.is-failed{border-color:#b26e75;background:#35212cf5}
+.tx-progress.is-unverified{border-color:#b59762;background:#34291df5}
+@media(max-width:680px){.tx-progress{top:4px;gap:8px;padding:9px 11px}
+ .tx-progress-proof code{font-size:10px}}

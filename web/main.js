@@ -31,19 +31,40 @@ $('contract').value=contract;$('rules').value=JSON.stringify(EXAMPLE_RULES,null,
 function log(text){$('log').textContent=text}
 const writeButtons={create_world:'create',propose_entry:'propose',assess_entry:'assess',
  ratify_entry:'ratify',decline_entry:'decline'};
-function txProgress(stage,method='',detail=''){
+const lastTxKey=address=>'canonatlas_last_verified_tx_'+address.toLowerCase();
+function txProgress(stage,method='',detail='',transactionHash=''){
  const labels={signing:'AWAITING WALLET SIGNATURE',submitted:'TRANSACTION SUBMITTED',
   consensus:'GENLAYER CONSENSUS',readback:'VERIFYING LATEST_FINAL',success:'SUCCESS',
   failed:'FAILED',unverified:'UNVERIFIED'};
+ const hash=transactionHash||pendingTx?.hash||'';
+ const verifiedHash=/^0x[a-fA-F0-9]{64}$/.test(hash)?hash:'';
  const root=$('txProgress');root.hidden=false;root.className='tx-progress is-'+stage;
- $('txProgressLabel').textContent=labels[stage]||'PROCESSING';
+ $('txProgressLabel').textContent=(labels[stage]||'PROCESSING')+(method?' · '+method.replaceAll('_',' '):'');
  $('txProgressDetail').textContent=detail;
- const waiting=['signing','submitted','consensus','readback'].includes(stage);
- $('txProgressSpinner').hidden=!waiting;
+ $('txProgressSpinner').hidden=!['signing','submitted','consensus','readback'].includes(stage);
+ $('txProgressProof').hidden=!verifiedHash;
+ $('txProgressHash').textContent=verifiedHash?verifiedHash.slice(0,12)+'…'+verifiedHash.slice(-10):'';
+ if(verifiedHash)$('txProgressLink').href=explorer(verifiedHash);
+ $('txProgressResume').hidden=!pendingTx||stage!=='unverified';
  for(const [methodName,id] of Object.entries(writeButtons)){
-   const node=$(id);
-   node.classList.toggle('is-tx-loading',waiting&&method===methodName);
+   $(id).classList.toggle('is-tx-loading',
+     ['signing','submitted','consensus','readback'].includes(stage)&&method===methodName);
  }
+ // Only FINALIZED receipt + verified readback permits a durable success label.
+ if(verifiedHash&&['success','failed'].includes(stage)){
+  try{if(typeof sessionStorage!=='undefined')sessionStorage.setItem(lastTxKey(contract),
+    JSON.stringify({stage,method,detail,hash:verifiedHash}));}catch{}
+ }
+}
+function restoreLastTx(){
+ $('txProgress').hidden=true;
+ if(pendingTx)return;
+ try{
+  if(typeof sessionStorage==='undefined')return;
+  const v=JSON.parse(sessionStorage.getItem(lastTxKey(contract))||'null');
+  if(v&&['success','failed'].includes(v.stage)&&/^0x[a-fA-F0-9]{64}$/.test(v.hash))
+    txProgress(v.stage,String(v.method||''),'Last transaction: '+String(v.detail||''),v.hash);
+ }catch{}
 }
 
 function walletFeedback(message,tone='warning'){
@@ -189,7 +210,7 @@ async function verifyPending(){
    }
    if(check.status==='CANCELED'){
      savePending(null);showPending();
-     txProgress('failed',record.method,'Transaction canceled by GenLayer. No success claimed.');
+     txProgress('failed',record.method,'CANCELED by GenLayer · no successful execution.',record.hash);
      log('CANCELED · NO SUCCESSFUL EXECUTION\n'+record.hash);
      return;
    }
@@ -199,7 +220,7 @@ async function verifyPending(){
      if(check.execution==='UNKNOWN'||check.consensus==='UNKNOWN')
        throw Error('Receipt fields are incomplete. Use Explorer; keep this hash for readback.');
      savePending(null);showPending();
-     txProgress('failed',record.method,'Finalized but execution/consensus failed: '+check.execution+' / '+check.consensus);
+     txProgress('failed',record.method,'FINALIZED · unsuccessful execution or consensus: '+check.execution+' / '+check.consensus,record.hash);
      log('FINALIZED BUT NOT SUCCESSFUL · '+check.execution+' / '+check.consensus+
        '\n'+record.hash+'\nNo accepted state is claimed.');return;
    }
@@ -228,7 +249,7 @@ async function verifyPending(){
    if(!expected[record.method])
      throw Error('The expected final result was not found in the selected latest-final world/entry.');
    savePending(null);showPending();
-   txProgress('success',record.method,'Accepted, executed and verified at LATEST_FINAL. World #'+world.id+' · v'+world.canon_version);
+   txProgress('success',record.method,'FINALIZED · accepted consensus · verified LATEST_FINAL. World #'+world.id+' · v'+world.canon_version,record.hash);
    log('VERIFIED · FINALIZED / FINISHED_WITH_RETURN / '+check.consensus+
      '\nWorld #'+world.id+' · canon v'+world.canon_version+
      '\nEntry '+(entry?.id||'none')+' · '+(entry?.status||'WORLD CREATED')+
@@ -270,7 +291,15 @@ $('connect').addEventListener('click',()=>{
 });
 $('load').addEventListener('click',()=>run(refresh));
 $('resume').addEventListener('click',()=>run(verifyPending));
-$('contract').addEventListener('change',()=>{contract=$('contract').value.trim();if(addressValid(contract))localStorage.setItem('canonatlas_address',contract);world=null;entry=null;pendingTx=loadPending(contract);setMode(false);render()});
+$('txProgressResume').addEventListener('click',()=>run(verifyPending));
+$('contract').addEventListener('change',()=>{
+ contract=$('contract').value.trim();
+ if(addressValid(contract))localStorage.setItem('canonatlas_address',contract);
+ world=null;entry=null;pendingTx=loadPending(contract);setMode(false);render();
+ if(pendingTx){
+  txProgress('unverified',pendingTx.method,'Stored transaction on this contract; use Resume verification.',pendingTx.hash);
+ }else restoreLastTx();
+});
 $('scene').addEventListener('input',()=>updateHash().catch(e=>log(e.message)));
 $('copyHash').addEventListener('click',()=>navigator.clipboard?.writeText($('sceneHash').textContent));
 $('create').addEventListener('click',()=>run(async()=>{
@@ -295,4 +324,4 @@ render();updateHash().catch(e=>log(e.message));
 // Show accepted on-chain canon when available. Never synthesize an on-chain success.
 showPending();
 if(pendingTx)run(verifyPending);
-else run(refresh);
+else{restoreLastTx();run(refresh);}
