@@ -26,6 +26,12 @@ export async function connectWallet(){
   connectedProvider=provider;
   return address;
 }
+/** Disconnect the website's signer session. An EIP-1193 wallet may still
+ * remember site permissions; this never claims to revoke wallet-side access. */
+export function disconnectWallet(){
+  if(stopWalletListeners){stopWalletListeners();stopWalletListeners=null;}
+  connectedProvider=null;
+}
 export function subscribeWalletChanges({onAccountsChanged,onChainChanged}){
   if(stopWalletListeners)stopWalletListeners();
   const provider=connectedProvider;

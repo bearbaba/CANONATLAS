@@ -20,6 +20,7 @@ function element(){return {value:'',textContent:'',innerHTML:'',disabled:false,h
  replaceChildren(...v){this.children=v},append(...v){this.children.push(...v)}}}
 function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntry,entryExists=true,connectError=null}={}){
  const nodes=new Map(),events={},writes=[],storage=new Map();
+ let disconnectCount=0;
  const initial={worldId:'1',entryId:'1',worldTitle:'The Glass Archipelago',
    premise:'A sea-bound world of original imaginary characters.',
    scene:'In year 166, Mira studied a memory mirror while nobody crossed the Quiet Sea.',
@@ -37,6 +38,7 @@ function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntr
  let shouldTimeout=timeout;
  const deps={
   connectWallet:async()=>{if(connectError)throw connectError;return actor},
+  disconnectWallet:()=>{disconnectCount+=1;},
   subscribeWalletChanges:({onAccountsChanged,onChainChanged})=>{
    events.accountsChanged=onAccountsChanged;events.chainChanged=onChainChanged;return ()=>{};
   },
@@ -66,7 +68,7 @@ function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntr
  };
  const code=readFileSync(new URL('../web/main.js',import.meta.url),'utf8')
   .replace(/^import .*;\s*$/gm,'');
- const imports=`const {connectWallet,subscribeWalletChanges,read,write,waitForFinalized,getTransactionState,getConsensusReceipt,explorer}=globalThis.deps;
+ const imports=`const {connectWallet,disconnectWallet,subscribeWalletChanges,read,write,waitForFinalized,getTransactionState,getConsensusReceipt,explorer}=globalThis.deps;
 const {finalReceipt,combineFinalChecks,normalizePendingTx}=globalThis.tx;
 const {addressValid,validWorld,validEntry,actionGates}=globalThis.safety;`;
  runInNewContext(imports+code,{
@@ -76,7 +78,7 @@ const {addressValid,validWorld,validEntry,actionGates}=globalThis.safety;`;
     removeItem:k=>storage.delete(k)},
   crypto:webcrypto,TextEncoder,Number,console
  });
- return {nodes,writes,events,storage,$,get world(){return world},get entry(){return entry},
+ return {nodes,writes,events,storage,$,get disconnectCount(){return disconnectCount},get world(){return world},get entry(){return entry},
   set timeout(value){shouldTimeout=value},
   async click(id){const handler=$(id).handlers.click;assert.ok(handler,'button '+id+' is not wired');
    await handler();await flush();await flush();await flush()}
@@ -183,13 +185,19 @@ test('wallet failures are visible on Overview without opening the GenLayer conso
  assert.match(h.$('walletAlert').textContent,/No browser wallet was detected/);
  assert.equal(h.$('connect').textContent,'Connect wallet ↗');
 });
-test('wallet success and network change are reported in the currently visible tab',async()=>{
+test('successful connect hides the green banner; network changes still show warnings',async()=>{
  const h=harness({actor:OWNER});await flush();await h.click('connect');
- assert.equal(h.$('walletAlert').className,'wallet-alert is-success');
- assert.match(h.$('walletAlert').textContent,/Studionet \(61999\)/);
+ assert.equal(h.$('walletAlert').hidden,true);
+ assert.equal(h.$('walletAlert').textContent,'');
+ assert.equal(h.$('connect').textContent,'Disconnect');
+ assert.equal(h.$('walletIdentity').hidden,false);
+ assert.match(h.$('walletIdentity').textContent,/✓/);
  h.events.chainChanged('0x1');
  assert.equal(h.$('ratify').disabled,true);
+ assert.equal(h.$('walletIdentity').hidden,true);
+ assert.equal(h.$('connect').textContent,'Connect wallet ↗');
  assert.equal(h.$('walletAlert').className,'wallet-alert is-warning');
+ assert.equal(h.disconnectCount,1);
 });
 
 test('Studio nested receipts require accepted execution and same-hash consensus before claiming success',()=>{
@@ -202,4 +210,25 @@ test('Studio nested receipts require accepted execution and same-hash consensus 
  assert.equal(combineFinalChecks(studio,rpc).success,true);
  assert.throws(()=>combineFinalChecks(finalReceipt({status:7,result:7}),rpc),/Conflicting consensus/);
  assert.equal(finalReceipt({status:7,txExecutionResult:1}).success,false);
+});
+
+test('Disconnect clears signer and hides identity without deleting public proof or requesting a new write',async()=>{
+ const h=harness({actor:OWNER});await flush();await h.click('connect');
+ assert.equal(h.$('ratify').disabled,false);
+ assert.equal(h.$('connect').textContent,'Disconnect');
+ await h.click('connect');
+ assert.equal(h.$('connect').textContent,'Connect wallet ↗');
+ assert.equal(h.$('walletIdentity').hidden,true);
+ assert.equal(h.$('walletIdentity').textContent,'');
+ assert.equal(h.$('walletAlert').hidden,true);
+ assert.equal(h.$('ratify').disabled,true);
+ assert.equal(h.$('worldState').textContent,'VERIFIED');
+ assert.equal(h.$('canonVersion').textContent,'v1');
+ assert.equal(h.writes.length,0);
+ assert.equal(h.disconnectCount,1);
+ await h.click('connect');
+ assert.equal(h.$('connect').textContent,'Disconnect');
+ assert.equal(h.$('walletIdentity').hidden,false);
+ assert.equal(h.$('ratify').disabled,false);
+ assert.equal(h.disconnectCount,1);
 });

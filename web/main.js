@@ -1,4 +1,4 @@
-import {connectWallet,subscribeWalletChanges,read,write,waitForFinalized,getTransactionState,getConsensusReceipt,explorer} from './chain.js';
+import {connectWallet,disconnectWallet,subscribeWalletChanges,read,write,waitForFinalized,getTransactionState,getConsensusReceipt,explorer} from './chain.js';
 import {finalReceipt,combineFinalChecks,normalizePendingTx} from './tx-status.js';
 import {addressValid,validWorld,validEntry,actionGates} from './safety.js';
 const $=id=>document.getElementById(id);
@@ -32,6 +32,10 @@ function log(text){$('log').textContent=text}
 function walletFeedback(message,tone='warning'){
  const node=$('walletAlert');node.hidden=false;node.className='wallet-alert is-'+tone;
  node.textContent=message;
+}
+function hideWalletFeedback(){
+ const node=$('walletAlert');node.hidden=true;node.textContent='';
+ node.className='wallet-alert';
 }
 function setMode(live){$('mode').textContent=live?'LATEST_FINAL · LIVE':'ILLUSTRATIVE PREVIEW';$('mode').classList.toggle('connected',!!live)}
 const short=s=>s?`${s.slice(0,8)}…${s.slice(-6)}`:'—';
@@ -89,7 +93,11 @@ function render(){const w=world||example;renderRules(w);
  $('worldId').disabled=busy||!!pendingTx;
  $('entryId').disabled=busy||!!pendingTx;
  if(pendingTx)showPending();
- $('connect').textContent=actor?short(actor)+' ✓':'Connect wallet ↗';
+ $('walletIdentity').hidden=!actor;
+ $('walletIdentity').textContent=actor?short(actor)+' ✓':'';
+ $('walletIdentity').title=actor||'';
+ $('connect').textContent=actor?'Disconnect':'Connect wallet ↗';
+ $('connect').disabled=busy;
 }
 async function updateHash(){const data=new TextEncoder().encode($('scene').value);
  const arr=new Uint8Array(await crypto.subtle.digest('SHA-256',data));
@@ -198,16 +206,33 @@ async function verifyPending(){
  }
 }
 
-$('connect').addEventListener('click',()=>run(async()=>{
- walletFeedback('Requesting wallet approval… Open the wallet extension to approve.','warning');
- actor=await connectWallet();
- subscribeWalletChanges({
-  onAccountsChanged:()=>{actor='';walletFeedback('Wallet account changed. Reconnect before signing.','warning');log('Wallet changed; reconnect before any new signature.');render();},
-  onChainChanged:()=>{actor='';walletFeedback('Wallet network changed. Reconnect to Studionet (61999).','warning');log('Network changed; reconnect before signing.');render();}
- });
- walletFeedback('Wallet connected: '+short(actor)+' · GenLayer Studionet (61999).','success');
- log('Connected '+actor+' on Studionet. Configure the deployed contract and verify latest-final state.');
-},{wallet:true}));
+$('connect').addEventListener('click',()=>{
+ if(actor){
+  // Disconnect only this website's signer session; never delete stored pending hashes.
+  // Some wallets keep site permissions until revoked in the extension itself.
+  disconnectWallet();actor='';hideWalletFeedback();
+  log('Wallet disconnected from CANONATLAS. On-chain evidence remains readable. You can reconnect at any time.');
+  render();return;
+ }
+ return run(async()=>{
+  walletFeedback('Requesting wallet approval… Open the wallet extension to approve.','warning');
+  actor=await connectWallet();
+  subscribeWalletChanges({
+   onAccountsChanged:()=>{
+    disconnectWallet();actor='';
+    walletFeedback('Wallet account changed. Reconnect before signing.','warning');
+    log('Wallet changed; reconnect before any new signature.');render();
+   },
+   onChainChanged:()=>{
+    disconnectWallet();actor='';
+    walletFeedback('Wallet network changed. Reconnect to Studionet (61999).','warning');
+    log('Network changed; reconnect before signing.');render();
+   }
+  });
+  hideWalletFeedback();
+  log('Connected '+actor+' on Studionet. Configure the deployed contract and verify latest-final state.');
+ },{wallet:true});
+});
 $('load').addEventListener('click',()=>run(refresh));
 $('resume').addEventListener('click',()=>run(verifyPending));
 $('contract').addEventListener('change',()=>{contract=$('contract').value.trim();if(addressValid(contract))localStorage.setItem('canonatlas_address',contract);world=null;entry=null;pendingTx=loadPending(contract);setMode(false);render()});
