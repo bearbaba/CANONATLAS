@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import {webcrypto} from 'node:crypto';
-import {finalReceipt,normalizePendingTx} from '../web/tx-status.js';
+import {finalReceipt,combineFinalChecks,normalizePendingTx} from '../web/tx-status.js';
 import {addressValid,validWorld,validEntry,actionGates} from '../web/safety.js';
 
 const OWNER='0x'+'a'.repeat(40),AUTHOR='0x'+'b'.repeat(40),HASH='0x'+'f'.repeat(64);
@@ -61,15 +61,16 @@ function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntr
     statusName:'FINALIZED',resultName:'MAJORITY_AGREE',txExecutionResultName:'FINISHED_WITH_RETURN'}},
   getTransactionState:async()=>({statusName:'FINALIZED',resultName:'MAJORITY_AGREE',
     txExecutionResultName:'FINISHED_WITH_RETURN'}),
+  getConsensusReceipt:async()=>({id:HASH,status:7,result:6,txExecutionResult:1}),
   explorer:hash=>'https://explorer-studio.genlayer.com/tx/'+hash
  };
  const code=readFileSync(new URL('../web/main.js',import.meta.url),'utf8')
   .replace(/^import .*;\s*$/gm,'');
- const imports=`const {connectWallet,subscribeWalletChanges,read,write,waitForFinalized,getTransactionState,explorer}=globalThis.deps;
-const {finalReceipt,normalizePendingTx}=globalThis.tx;
+ const imports=`const {connectWallet,subscribeWalletChanges,read,write,waitForFinalized,getTransactionState,getConsensusReceipt,explorer}=globalThis.deps;
+const {finalReceipt,combineFinalChecks,normalizePendingTx}=globalThis.tx;
 const {addressValid,validWorld,validEntry,actionGates}=globalThis.safety;`;
  runInNewContext(imports+code,{
-  deps,tx:{finalReceipt,normalizePendingTx},safety:{addressValid,validWorld,validEntry,actionGates},
+  deps,tx:{finalReceipt,combineFinalChecks,normalizePendingTx},safety:{addressValid,validWorld,validEntry,actionGates},
   document:{getElementById:$,createElement:element},window:{ethereum:{on:(key,cb)=>events[key]=cb}},
   localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),
     removeItem:k=>storage.delete(k)},
@@ -189,4 +190,16 @@ test('wallet success and network change are reported in the currently visible ta
  h.events.chainChanged('0x1');
  assert.equal(h.$('ratify').disabled,true);
  assert.equal(h.$('walletAlert').className,'wallet-alert is-warning');
+});
+
+test('Studio nested receipts require accepted execution and same-hash consensus before claiming success',()=>{
+ const studio=finalReceipt({status_name:'FINALIZED',
+   consensus_data:{leader_receipt:[{execution_result:'SUCCESS'}]}});
+ const rpc=finalReceipt({status:7,result:6,txExecutionResult:1});
+ assert.equal(studio.finalized,true);
+ assert.equal(studio.execution,'FINISHED_WITH_RETURN');
+ assert.equal(studio.success,false,'execution alone is insufficient');
+ assert.equal(combineFinalChecks(studio,rpc).success,true);
+ assert.throws(()=>combineFinalChecks(finalReceipt({status:7,result:7}),rpc),/Conflicting consensus/);
+ assert.equal(finalReceipt({status:7,txExecutionResult:1}).success,false);
 });

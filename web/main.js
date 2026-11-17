@@ -1,5 +1,5 @@
-import {connectWallet,subscribeWalletChanges,read,write,waitForFinalized,getTransactionState,explorer} from './chain.js';
-import {finalReceipt,normalizePendingTx} from './tx-status.js';
+import {connectWallet,subscribeWalletChanges,read,write,waitForFinalized,getTransactionState,getConsensusReceipt,explorer} from './chain.js';
+import {finalReceipt,combineFinalChecks,normalizePendingTx} from './tx-status.js';
 import {addressValid,validWorld,validEntry,actionGates} from './safety.js';
 const $=id=>document.getElementById(id);
 const EXAMPLE_RULES=[
@@ -139,9 +139,20 @@ async function verifyPending(){
  try{
    let receipt=await waitForFinalized(record.hash);
    let check=finalReceipt(receipt);
-   if(check.finalized&&!check.success&&check.consensus==='UNKNOWN'){
-     receipt=await getTransactionState(record.hash);
-     check=finalReceipt(receipt);
+   if(check.finalized&&(check.execution==='UNKNOWN'||check.consensus==='UNKNOWN')){
+     for(const reader of [getTransactionState,getConsensusReceipt]){
+       if(check.execution!=='UNKNOWN'&&check.consensus!=='UNKNOWN')break;
+       try{check=combineFinalChecks(check,finalReceipt(await reader(record.hash)));}
+       catch(e){
+        if(String(e.message||e).startsWith('Conflicting '))throw e;
+        // Keep ambiguous outcomes unverified; never infer success.
+       }
+     }
+   }
+   if(check.status==='CANCELED'){
+     savePending(null);
+     log('CANCELED · NO SUCCESSFUL EXECUTION\n'+record.hash);
+     return;
    }
    if(!check.finalized)throw Error('Transaction has not reached FINALIZED status.');
    if(!check.success){
@@ -223,4 +234,5 @@ $('decline').addEventListener('click',()=>run(async()=>{
 render();updateHash().catch(e=>log(e.message));
 // Show accepted on-chain canon when available. Never synthesize an on-chain success.
 showPending();
-run(refresh);
+if(pendingTx)run(verifyPending);
+else run(refresh);
