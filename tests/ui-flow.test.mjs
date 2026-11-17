@@ -18,7 +18,7 @@ function element(){return {value:'',textContent:'',innerHTML:'',disabled:false,h
  className:'',style:{},classList:{add(){},remove(){},toggle(){}},href:'',title:'',
  handlers:{},children:[],addEventListener(name,fn){this.handlers[name]=fn},
  replaceChildren(...v){this.children=v},append(...v){this.children.push(...v)}}}
-function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntry,entryExists=true,connectError=null}={}){
+function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntry,entryExists=true,connectError=null,approvalGate=null}={}){
  const nodes=new Map(),events={},writes=[],storage=new Map();
  let disconnectCount=0;
  const initial={worldId:'1',entryId:'1',worldTitle:'The Glass Archipelago',
@@ -44,7 +44,7 @@ function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntr
   },
   read:async(_addr,method)=>method==='stats'?{name:'CANONATLAS',version:'1.0.0',citation_mode:'DETERMINISTIC_REFERENCE_IDS',worlds:worldsCount,entries:entriesCount}:
     method==='get_world'?structuredClone(world):structuredClone(entry),
-  write:async(_addr,_signer,method,args)=>{writes.push({method,args});
+  write:async(_addr,_signer,method,args)=>{if(approvalGate)await approvalGate;writes.push({method,args});
    if(method==='ratify_entry'){entry={...entry,status:'RATIFIED'};world={...world,canon_version:2,
       pending_entry:0,ratified_entries:[1],canon:[...RULES,{id:'ENTRY_1',kind:'continuity',text:entry.scene}]};}
    else if(method==='assess_entry'){entry={...entry,status:'CONSISTENT',assessment_runs:1};}
@@ -231,4 +231,39 @@ test('Disconnect clears signer and hides identity without deleting public proof 
  assert.equal(h.$('walletIdentity').hidden,false);
  assert.equal(h.$('ratify').disabled,false);
  assert.equal(h.disconnectCount,1);
+});
+
+test('wallet approval shows rotating loading immediately, before MetaMask resolves',async()=>{
+ let approve;const gate=new Promise(resolve=>{approve=resolve});
+ const h=harness({approvalGate:gate});await flush();await h.click('connect');
+ const action=h.$('create').handlers.click();
+ await flush();
+ assert.equal(h.$('txProgress').hidden,false);
+ assert.equal(h.$('txProgressSpinner').hidden,false);
+ assert.equal(h.$('txProgressLabel').textContent,'AWAITING WALLET SIGNATURE');
+ assert.match(h.$('txProgressDetail').textContent,/MetaMask/);
+ assert.equal(h.writes.length,0,'must not write before signature approval');
+ approve();await action;await flush();
+ assert.equal(h.$('txProgressSpinner').hidden,true);
+ assert.equal(h.$('txProgressLabel').textContent,'SUCCESS');
+ assert.equal(h.writes.length,1);
+ assert.equal(h.$('txBox').hidden,true);
+});
+test('consensus timeout ends the spinner at UNVERIFIED, without resubmitting',async()=>{
+ const h=harness({timeout:true});await flush();await h.click('connect');await h.click('ratify');
+ assert.equal(h.$('txProgressLabel').textContent,'UNVERIFIED');
+ assert.equal(h.$('txProgressSpinner').hidden,true);
+ assert.equal(h.storage.size,1);
+ assert.equal(h.writes.length,1);
+ h.timeout=false;await h.click('resume');
+ assert.equal(h.$('txProgressLabel').textContent,'SUCCESS');
+ assert.equal(h.$('txProgressSpinner').hidden,true);
+ assert.equal(h.writes.length,1);
+});
+test('public evidence and UI retain full result after completed write; no pending badge remains',async()=>{
+ const h=harness();await flush();await h.click('connect');await h.click('ratify');
+ assert.equal(h.$('entryStatus').textContent,'RATIFIED');
+ assert.equal(h.$('txProgressLabel').textContent,'SUCCESS');
+ assert.equal(h.$('txBox').hidden,true);
+ assert.equal(h.$('walletAlert').hidden,true);
 });

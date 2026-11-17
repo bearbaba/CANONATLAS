@@ -24,11 +24,28 @@ function savePending(record){
  else localStorage.removeItem(pendingKey(contract));
 }
 function showPending(){
- if(!pendingTx)return;
- $('txBox').hidden=false;$('txLink').href=explorer(pendingTx.hash);
+ $('txBox').hidden=!pendingTx;
+ if(pendingTx)$('txLink').href=explorer(pendingTx.hash);
 }
 $('contract').value=contract;$('rules').value=JSON.stringify(EXAMPLE_RULES,null,2);
 function log(text){$('log').textContent=text}
+const writeButtons={create_world:'create',propose_entry:'propose',assess_entry:'assess',
+ ratify_entry:'ratify',decline_entry:'decline'};
+function txProgress(stage,method='',detail=''){
+ const labels={signing:'AWAITING WALLET SIGNATURE',submitted:'TRANSACTION SUBMITTED',
+  consensus:'GENLAYER CONSENSUS',readback:'VERIFYING LATEST_FINAL',success:'SUCCESS',
+  failed:'FAILED',unverified:'UNVERIFIED'};
+ const root=$('txProgress');root.hidden=false;root.className='tx-progress is-'+stage;
+ $('txProgressLabel').textContent=labels[stage]||'PROCESSING';
+ $('txProgressDetail').textContent=detail;
+ const waiting=['signing','submitted','consensus','readback'].includes(stage);
+ $('txProgressSpinner').hidden=!waiting;
+ for(const [methodName,id] of Object.entries(writeButtons)){
+   const node=$(id);
+   node.classList.toggle('is-tx-loading',waiting&&method===methodName);
+ }
+}
+
 function walletFeedback(message,tone='warning'){
  const node=$('walletAlert');node.hidden=false;node.className='wallet-alert is-'+tone;
  node.textContent=message;
@@ -132,10 +149,22 @@ async function sign(method,args){if(!actor)throw Error('Connect a Studionet wall
  const key={create_world:'create',propose_entry:'propose',assess_entry:'assess',ratify_entry:'ratify',decline_entry:'decline'}[method];
  if(pendingTx)throw Error('Pending transaction hash exists. Resume its verification; never sign the same action twice.');
  if(method!=='create_world'&&!gates[key])throw Error('Current wallet or finalized state does not authorize '+method);
- log('Wallet signature requested for '+method+'. Inspect the transaction and then click Read latest-final.');
- const hash=await write(contract,actor,method,args);
+ txProgress('signing',method,'Check MetaMask and confirm or reject the request.');
+ log('Wallet signature requested for '+method+'. Inspect the request in MetaMask.');
+ let hash;
+ try{hash=await write(contract,actor,method,args);}
+ catch(error){
+  const message=String(error.message||error);
+  const rejected=error?.code===4001||/rejected|denied|user rejected/i.test(message);
+  txProgress(rejected?'failed':'unverified',method,rejected?
+   'Signature rejected. No transaction was submitted.':
+   'No hash returned. Check wallet history before retrying: '+message);
+  throw error;
+ }
  savePending({hash,method,contract,signer:actor,worldId:world?.id??null,entryId:entry?.id??null});
- showPending();log('TRANSACTION SUBMITTED · waiting for FINALIZED\n'+hash+
+ showPending();
+ txProgress('submitted',method,'Transaction hash saved. Awaiting GenLayer finality.');
+ log('TRANSACTION SUBMITTED · waiting for FINALIZED\n'+hash+
    '\nNo second wallet signature will be requested while this hash is unresolved.');
  await verifyPending();
 }
@@ -143,6 +172,7 @@ async function sign(method,args){if(!actor)throw Error('Connect a Studionet wall
 async function verifyPending(){
  if(!pendingTx)throw Error('No pending transaction hash is stored.');
  const record=pendingTx;showPending();
+ txProgress('consensus',record.method,'Confirming the original transaction; do not sign twice.');
  log('VERIFYING STORED TX · '+record.method+'\n'+record.hash+'\nWaiting for finality and on-chain readback.');
  try{
    let receipt=await waitForFinalized(record.hash);
@@ -158,15 +188,18 @@ async function verifyPending(){
      }
    }
    if(check.status==='CANCELED'){
-     savePending(null);
+     savePending(null);showPending();
+     txProgress('failed',record.method,'Transaction canceled by GenLayer. No success claimed.');
      log('CANCELED · NO SUCCESSFUL EXECUTION\n'+record.hash);
      return;
    }
    if(!check.finalized)throw Error('Transaction has not reached FINALIZED status.');
+   txProgress('readback',record.method,'Finalized. Checking execution and persisted world state.');
    if(!check.success){
      if(check.execution==='UNKNOWN'||check.consensus==='UNKNOWN')
        throw Error('Receipt fields are incomplete. Use Explorer; keep this hash for readback.');
-     savePending(null);
+     savePending(null);showPending();
+     txProgress('failed',record.method,'Finalized but execution/consensus failed: '+check.execution+' / '+check.consensus);
      log('FINALIZED BUT NOT SUCCESSFUL · '+check.execution+' / '+check.consensus+
        '\n'+record.hash+'\nNo accepted state is claimed.');return;
    }
@@ -194,12 +227,14 @@ async function verifyPending(){
    };
    if(!expected[record.method])
      throw Error('The expected final result was not found in the selected latest-final world/entry.');
-   savePending(null);
+   savePending(null);showPending();
+   txProgress('success',record.method,'Accepted, executed and verified at LATEST_FINAL. World #'+world.id+' · v'+world.canon_version);
    log('VERIFIED · FINALIZED / FINISHED_WITH_RETURN / '+check.consensus+
      '\nWorld #'+world.id+' · canon v'+world.canon_version+
      '\nEntry '+(entry?.id||'none')+' · '+(entry?.status||'WORLD CREATED')+
      '\nTransaction '+record.hash+'\nNo duplicate signature submitted.');
  }catch(e){
+   txProgress('unverified',record.method,'Original hash preserved. Resume verification; do not sign again: '+String(e.message||e));
    log('PENDING HASH PRESERVED · '+record.hash+
      '\nStatus not independently verified: '+String(e.message||e)+
      '\nUse Resume verification or open Explorer. Do not blindly sign again.');
