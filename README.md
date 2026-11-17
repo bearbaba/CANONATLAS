@@ -19,6 +19,10 @@
 
 **Independent readback:** [`scripts/verify-live.mjs`](scripts/verify-live.mjs) validates deployment source and `LATEST_FINAL` world and entry state, 3 criterion references, original and upgraded canon digests, signer independence and steward ratification. [Successful CI](https://github.com/bearbaba/CANONATLAS/actions/runs/43853942589). The story and rules are original fictional demonstration data; no copyright ownership or general AI accuracy is certified.
 
+## V1.1 consensus stability candidate (not yet deployed)
+
+A separate contract, [`contracts/canon_atlas_v11.py`](contracts/canon_atlas_v11.py), replaces verbose comparative-JSON consensus with three stable classification labels and validators that independently reassess the frozen canon. Its tests and deployment instructions are in [`docs/V11_DEPLOYMENT.md`](docs/V11_DEPLOYMENT.md). **V1 World #1/#2 and both Undetermined transactions remain on the original deployment; no data has been migrated.** Do not describe V1.1 as deployed or consensus-verified until a new Studionet transaction is accepted.
+
 ## Reviewer-facing website and wallet lifecycle
 
 The deployed GenLayer Studionet contract is selected automatically when [the CANONATLAS website](https://canonatlas.vercel.app) loads. On a live `LATEST_FINAL` read, the visitor sees **World #1**, its ratified **canon version 2**, the status of **Entry #1**, and the **literal evidence/reference IDs** behind GenLayer's three AI judgments. These are read-only, independently finalized records, not a simulated AI verdict.

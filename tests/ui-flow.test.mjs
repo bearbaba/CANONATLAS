@@ -415,3 +415,9 @@ test('finalized disagreed vote is not NoMajority, but both are unaccepted canon 
  assert.equal(isUndeterminedFinal(disagreed),true);
  assert.equal(isUndeterminedFinal(finalReceipt({status:7,result:1,txExecutionResult:1})),false);
 });
+
+test('new V1.1 contract address works with UI version gate without reclassifying V1 world data',()=>{
+ const app=readFileSync(new URL('../web/main.js',import.meta.url),'utf8');
+ assert.match(app,/\['1\.0\.0','1\.1\.0'\]\.includes\(stats\.version\)/);
+ assert.match(app,/stats\.citation_mode/);
+});
