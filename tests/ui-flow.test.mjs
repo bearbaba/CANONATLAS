@@ -18,7 +18,7 @@ function element(){return {value:'',textContent:'',innerHTML:'',disabled:false,h
  className:'',style:{},classList:{add(){},remove(){},toggle(){}},href:'',title:'',
  handlers:{},children:[],addEventListener(name,fn){this.handlers[name]=fn},
  replaceChildren(...v){this.children=v},append(...v){this.children.push(...v)}}}
-function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false}={}){
+function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntry,entryExists=true}={}){
  const nodes=new Map(),events={},writes=[],storage=new Map();
  const initial={worldId:'1',entryId:'1',worldTitle:'The Glass Archipelago',
    premise:'A sea-bound world of original imaginary characters.',
@@ -26,22 +26,32 @@ function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false}={}){
    entryTitle:'A memory of the harbor'};
  const $=id=>{if(!nodes.has(id)){const x=element();x.value=initial[id]||'';nodes.set(id,x)}return nodes.get(id)};
  let world={id:1,owner:OWNER,canon_version:1,canon:RULES,
-   pending_entry:1,ratified_entries:[],closed_entries:[],canon_sha256:'a'.repeat(64)};
- let entry={id:1,world_id:1,author:AUTHOR,status:entryStatus,canon_version:1,
+   pending_entry:pendingEntry??1,ratified_entries:[],closed_entries:[],canon_sha256:'a'.repeat(64)};
+ let worldsCount=1,entriesCount=1;
+ let entry=entryExists?{id:1,world_id:1,author:AUTHOR,status:entryStatus,canon_version:1,
    scene:'In year 166, Mira read a mirror memory.',scene_sha256:'b'.repeat(64),
-   assessment_runs:1,assessment:{verdict:'CONSISTENT',checks:[
+   assessment_runs:entryStatus==='SUBMITTED'?0:1,assessment:{verdict:'CONSISTENT',checks:[
     {criterion:'chronology',result:'PASS',reason:'The time sequence matches frozen canon.',
       references:[{ref_id:'TIME1:1',field:'chronology',quote:'A storm occurred in year 162.'}]}
-   ]}};
+   ]}}:null;
  let shouldTimeout=timeout;
  const deps={
   connectWallet:async()=>actor,
-  read:async(_addr,method)=>method==='stats'?{name:'CANONATLAS',version:'1.0.0',citation_mode:'DETERMINISTIC_REFERENCE_IDS',worlds:1,entries:1}:
+  read:async(_addr,method)=>method==='stats'?{name:'CANONATLAS',version:'1.0.0',citation_mode:'DETERMINISTIC_REFERENCE_IDS',worlds:worldsCount,entries:entriesCount}:
     method==='get_world'?structuredClone(world):structuredClone(entry),
   write:async(_addr,_signer,method,args)=>{writes.push({method,args});
    if(method==='ratify_entry'){entry={...entry,status:'RATIFIED'};world={...world,canon_version:2,
       pending_entry:0,ratified_entries:[1],canon:[...RULES,{id:'ENTRY_1',kind:'continuity',text:entry.scene}]};}
    else if(method==='assess_entry'){entry={...entry,status:'CONSISTENT',assessment_runs:1};}
+   else if(method==='create_world'){
+    worldsCount+=1;world={...world,id:worldsCount,owner:actor,canon_version:1,
+      canon:RULES,pending_entry:0,ratified_entries:[]};
+   }else if(method==='propose_entry'){
+    entriesCount+=1;entry={...entry,id:entriesCount,world_id:world.id,author:actor,
+      status:'SUBMITTED',canon_version:world.canon_version,
+      scene:'A new author's original scene.',scene_sha256:'c'.repeat(64),
+      assessment_runs:0,assessment:{}};world={...world,pending_entry:entriesCount};
+   }
    else if(method==='decline_entry'){entry={...entry,status:'DECLINED'};world={...world,pending_entry:0};}
    return HASH},
   waitForFinalized:async()=>{if(shouldTimeout)throw Error('temporary remote RPC timeout');return {
@@ -125,4 +135,38 @@ test('wallet change immediately disables steward ratification',async()=>{
  assert.equal(h.$('ratify').disabled,false);
  h.events.accountsChanged([AUTHOR]);
  assert.equal(h.$('ratify').disabled,true);
+});
+
+test('steward creates a new world through signed wallet and finds its actual new world ID',async()=>{
+ const h=harness({actor:OWNER});
+ await flush();await h.click('connect');
+ assert.equal(h.$('create').disabled,false);
+ await h.click('create');
+ assert.equal(h.writes.length,1);
+ assert.equal(h.writes[0].method,'create_world');
+ assert.equal(h.$('worldId').value,'2');
+ assert.equal(h.$('worldState').textContent,'VERIFIED');
+ assert.match(h.$('log').textContent,/WORLD CREATED/);
+});
+test('independent author proposes a chapter and sees a submitted entry ID',async()=>{
+ const h=harness({actor:AUTHOR,pendingEntry:0,entryExists:false});
+ await flush();await h.click('connect');
+ assert.equal(h.$('propose').disabled,false);
+ await h.click('propose');
+ assert.equal(h.writes.length,1);
+ assert.equal(h.writes[0].method,'propose_entry');
+ assert.equal(h.$('entryId').value,'2');
+ assert.equal(h.$('entryStatus').textContent,'SUBMITTED');
+ assert.match(h.$('log').textContent,/VERIFIED · FINALIZED/);
+});
+test('only original author can request initial independent AI review of a submitted scene',async()=>{
+ const h=harness({actor:AUTHOR,entryStatus:'SUBMITTED'});
+ await flush();await h.click('connect');
+ assert.equal(h.$('assess').disabled,false);
+ await h.click('assess');
+ assert.equal(h.writes[0].method,'assess_entry');
+ assert.equal(h.$('entryStatus').textContent,'CONSISTENT');
+ const owner=harness({actor:OWNER,entryStatus:'SUBMITTED'});
+ await flush();await owner.click('connect');
+ assert.equal(owner.$('assess').disabled,true);
 });
