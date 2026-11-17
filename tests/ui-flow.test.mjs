@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {runInNewContext} from 'node:vm';
 import {webcrypto} from 'node:crypto';
-import {finalReceipt,combineFinalChecks,normalizePendingTx} from '../web/tx-status.js';
+import {finalReceipt,combineFinalChecks,normalizePendingTx,reconcileReceiptSnapshots,isUndeterminedFinal} from '../web/tx-status.js';
 import {addressValid,validWorld,validEntry,actionGates} from '../web/safety.js';
 import {readTxHistory,upsertTxHistory,migrateLegacyTx} from '../web/history.js';
 
@@ -19,7 +19,7 @@ function element(){return {value:'',textContent:'',innerHTML:'',disabled:false,h
  className:'',style:{},classList:{add(){},remove(){},toggle(){}},href:'',title:'',
  handlers:{},children:[],addEventListener(name,fn){this.handlers[name]=fn},
  replaceChildren(...v){this.children=v},append(...v){this.children.push(...v)}}}
-function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntry,entryExists=true,connectError=null,approvalGate=null}={}){
+function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntry,entryExists=true,connectError=null,approvalGate=null,undetermined=false,staleSdk=false}={}){
  const nodes=new Map(),events={},writes=[],storage=new Map();
  let disconnectCount=0;
  const initial={worldId:'1',entryId:'1',worldTitle:'The Glass Archipelago',
@@ -48,7 +48,7 @@ function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntr
   write:async(_addr,_signer,method,args)=>{if(approvalGate)await approvalGate;writes.push({method,args});
    if(method==='ratify_entry'){entry={...entry,status:'RATIFIED'};world={...world,canon_version:2,
       pending_entry:0,ratified_entries:[1],canon:[...RULES,{id:'ENTRY_1',kind:'continuity',text:entry.scene}]};}
-   else if(method==='assess_entry'){entry={...entry,status:'CONSISTENT',assessment_runs:1};}
+   else if(method==='assess_entry'&&!undetermined){entry={...entry,status:'CONSISTENT',assessment_runs:1};}
    else if(method==='create_world'){
     worldsCount+=1;world={...world,id:worldsCount,owner:actor,canon_version:1,
       canon:RULES,pending_entry:0,ratified_entries:[]};
@@ -60,21 +60,24 @@ function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntr
    }
    else if(method==='decline_entry'){entry={...entry,status:'DECLINED'};world={...world,pending_entry:0};}
    return HASH},
-  waitForFinalized:async()=>{if(shouldTimeout)throw Error('temporary remote RPC timeout');return {
-    statusName:'FINALIZED',resultName:'MAJORITY_AGREE',txExecutionResultName:'FINISHED_WITH_RETURN'}},
-  getTransactionState:async()=>({statusName:'FINALIZED',resultName:'MAJORITY_AGREE',
-    txExecutionResultName:'FINISHED_WITH_RETURN'}),
-  getConsensusReceipt:async()=>({id:HASH,status:7,result:6,txExecutionResult:1}),
+  waitForFinalized:async()=>{if(shouldTimeout||staleSdk)throw Error('temporary remote RPC timeout');
+    return {statusName:'FINALIZED',resultName:undetermined?'NO_MAJORITY':'MAJORITY_AGREE',
+      txExecutionResultName:'FINISHED_WITH_RETURN'}},
+  getTransactionState:async()=>shouldTimeout||staleSdk?{statusName:'COMMITTING',status:3}:
+    {statusName:'FINALIZED',resultName:undetermined?'NO_MAJORITY':'MAJORITY_AGREE',
+      txExecutionResultName:'FINISHED_WITH_RETURN'},
+  getConsensusReceipt:async()=>shouldTimeout&&!staleSdk?{id:HASH,status:3,result:0,txExecutionResult:0}:
+    {id:HASH,status:7,result:undetermined?5:6,txExecutionResult:1},
   explorer:hash=>'https://explorer-studio.genlayer.com/tx/'+hash
  };
  const code=readFileSync(new URL('../web/main.js',import.meta.url),'utf8')
   .replace(/^import .*;\s*$/gm,'');
  const imports=`const {connectWallet,disconnectWallet,subscribeWalletChanges,read,write,waitForFinalized,getTransactionState,getConsensusReceipt,explorer}=globalThis.deps;
-const {finalReceipt,combineFinalChecks,normalizePendingTx}=globalThis.tx;
+const {finalReceipt,combineFinalChecks,normalizePendingTx,reconcileReceiptSnapshots,isUndeterminedFinal}=globalThis.tx;
 const {addressValid,validWorld,validEntry,actionGates}=globalThis.safety;
 const {readTxHistory,upsertTxHistory,migrateLegacyTx}=globalThis.historyDeps;`;
  runInNewContext(imports+code,{
-  deps,tx:{finalReceipt,combineFinalChecks,normalizePendingTx},safety:{addressValid,validWorld,validEntry,actionGates},
+  deps,tx:{finalReceipt,combineFinalChecks,normalizePendingTx,reconcileReceiptSnapshots,isUndeterminedFinal},safety:{addressValid,validWorld,validEntry,actionGates},
   historyDeps:{readTxHistory,upsertTxHistory,migrateLegacyTx},
   document:{getElementById:$,createElement:element},window:{ethereum:{on:(key,cb)=>events[key]=cb}},
   localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),
@@ -337,4 +340,42 @@ test('transaction history is a separate workspace; dismiss button is not a walle
  assert.match(html,/id="txHistoryList"/);
  assert.match(html,/href="#history"/);
  assert.match(html,/data-workspace-screens="overview,canon,proposal,chain,history"/);
+});
+
+test('SDK stale status=3 cannot override canonical FINALIZED NO_MAJORITY assessment',async()=>{
+ const h=harness({actor:AUTHOR,entryStatus:'SUBMITTED',undetermined:true,staleSdk:true});
+ await flush();await h.click('connect');
+ assert.equal(h.$('assess').disabled,false);
+ await h.click('assess');
+ assert.equal(h.$('txProgressLabel').textContent,'FINALIZED · UNDETERMINED');
+ assert.equal(h.$('txProgressSpinner').hidden,true);
+ assert.equal(h.$('txBox').hidden,true);
+ assert.equal(h.$('entryStatus').textContent,'SUBMITTED','unaccepted assessment must not mutate entry');
+ assert.equal(h.$('assess').disabled,false,'old finalized pending hash must not lock future actions');
+ assert.equal(h.writes.length,1,'must not sign a retry automatically');
+ const rows=readTxHistory({getItem:k=>h.storage.get(k)||null},CONTRACT);
+ assert.equal(rows.length,1);
+ assert.equal(rows[0].stage,'undetermined');
+ assert.equal(rows[0].hash,HASH);
+ assert.equal(h.storage.has('canonatlas_pending_'+CONTRACT.toLowerCase()),false);
+});
+test('direct canonical FINALIZED and SDK old Committing receipt select the finalized one',()=>{
+ const authoritative=finalReceipt({id:HASH,status:7,result:5,txExecutionResult:1});
+ const stale=finalReceipt({status:3, result:0});
+ const check=reconcileReceiptSnapshots([authoritative,stale]);
+ assert.equal(check.finalized,true);
+ assert.equal(check.success,false);
+ assert.equal(check.consensus,'NO_MAJORITY');
+ assert.equal(isUndeterminedFinal(check),true);
+ assert.equal(finalReceipt({status:6,result:5}).finalized,false,'Undetermined decision is not finality');
+});
+test('unfinalized SDK and canonical snapshots must retain pending and never claim success',async()=>{
+ const h=harness({actor:AUTHOR,entryStatus:'SUBMITTED',timeout:true});
+ await flush();await h.click('connect');
+ await h.click('assess');
+ assert.equal(h.$('txProgressLabel').textContent,'UNVERIFIED');
+ assert.equal(h.$('txBox').hidden,false);
+ assert.equal(h.storage.has('canonatlas_pending_'+CONTRACT.toLowerCase()),true);
+ assert.equal(h.$('assess').disabled,true);
+ assert.equal(h.writes.length,1);
 });
