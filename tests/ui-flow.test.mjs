@@ -75,7 +75,7 @@ const {addressValid,validWorld,validEntry,actionGates}=globalThis.safety;`;
  return {nodes,writes,events,storage,$,get world(){return world},get entry(){return entry},
   set timeout(value){shouldTimeout=value},
   async click(id){const handler=$(id).handlers.click;assert.ok(handler,'button '+id+' is not wired');
-   handler();await flush();await flush();await flush()}
+   await handler();await flush();await flush();await flush()}
  };
 }
 test('GenLayer success must be FINALIZED, accepted and execution-successful',()=>{
