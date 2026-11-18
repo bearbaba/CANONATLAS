@@ -3,6 +3,10 @@ import {finalReceipt,normalizePendingTx,reconcileReceiptSnapshots,isUndetermined
 import {addressValid,validWorld,validEntry,actionGates} from './safety.js';
 import {readTxHistory,upsertTxHistory,migrateLegacyTx} from './history.js';
 const $=id=>document.getElementById(id);
+const DEPLOYMENTS=Object.freeze({
+ v1:'0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0',
+ v11:'0x9a08fa0BcE251D5423af41bf5f287bd32BF3779d'
+});
 const EXAMPLE_RULES=[
  {id:'CHAR1',kind:'continuity',text:'The Lumen Keepers preserve the solar lantern and none has crossed the Quiet Sea.'},
  {id:'TIME1',kind:'chronology',text:'The port of Ilyra was founded in year 140 and the Great Tide happened in year 162.'},
@@ -12,7 +16,7 @@ const example={id:1,owner:'0x'+'a'.repeat(40),title:'The Glass Archipelago',
  premise:'A sea-bound world of light-bearing guardians, memory mirrors and irreversible tides.',
  canon:EXAMPLE_RULES,canon_version:1,canon_sha256:'',pending_entry:0,ratified_entries:[],closed_entries:[]};
 const labels={continuity:'Living continuity',chronology:'The timeline',world_rules:'Laws of the world'};
-let contract=localStorage.getItem('canonatlas_address')||'0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0',actor='',world=null,entry=null,busy=false;
+let contract=localStorage.getItem('canonatlas_address')||DEPLOYMENTS.v1,actor='',world=null,entry=null,busy=false,verifiedDeployment=false;
 const pendingKey=address=>'canonatlas_pending_'+address.toLowerCase();
 function loadPending(address){
  try{return normalizePendingTx(JSON.parse(localStorage.getItem(pendingKey(address))),address)}
@@ -106,7 +110,11 @@ function hideWalletFeedback(){
  const node=$('walletAlert');node.hidden=true;node.textContent='';
  node.className='wallet-alert';
 }
-function setMode(live){$('mode').textContent=live?'LATEST_FINAL · LIVE':'ILLUSTRATIVE PREVIEW';$('mode').classList.toggle('connected',!!live)}
+function setMode(live){
+ verifiedDeployment=!!live;
+ $('mode').textContent=live?'LATEST_FINAL · LIVE':'ILLUSTRATIVE PREVIEW';
+ $('mode').classList.toggle('connected',!!live);
+}
 const short=s=>s?`${s.slice(0,8)}…${s.slice(-6)}`:'—';
 function renderRules(w){const parent=$('canonList');parent.replaceChildren();
  for(const [i,r] of w.canon.entries()){
@@ -155,7 +163,11 @@ function render(){const w=world||example;renderRules(w);
   entry.assessment.checks.map(c=>`${c.criterion.toUpperCase()} ${c.result}`).join(' · '):
   'A visual preview is not an AI verdict. Only accepted consensus committed to latest-final state is considered verified.';
  const gates=actor?actionGates(world,entry,actor):{};
- for(const action of ['create','propose','assess','ratify','decline'])$(action).disabled=busy||!!pendingTx||!contract||!actor||!gates[action];
+ for(const action of ['create','propose','assess','ratify','decline'])$(action).disabled=busy||!!pendingTx||!verifiedDeployment||!contract||!actor||!gates[action];
+ $('selectV11').disabled=busy||!!pendingTx;
+ $('selectV1').disabled=busy||!!pendingTx;
+ $('selectV11').classList.toggle('is-selected',contract.toLowerCase()===DEPLOYMENTS.v11.toLowerCase());
+ $('selectV1').classList.toggle('is-selected',contract.toLowerCase()===DEPLOYMENTS.v1.toLowerCase());
  $('load').disabled=busy||!contract;
  $('resume').disabled=busy||!pendingTx;
  $('contract').disabled=busy||!!pendingTx;
@@ -173,7 +185,9 @@ async function updateHash(){const data=new TextEncoder().encode($('scene').value
  const hex=Array.from(arr,b=>b.toString(16).padStart(2,'0')).join('');
  $('sceneHash').textContent=hex;return hex;
 }
-async function refresh(){contract=$('contract').value.trim();if(!addressValid(contract))throw Error('Enter a valid deployed contract address.');
+async function refresh(){
+ setMode(false);
+ contract=$('contract').value.trim();if(!addressValid(contract))throw Error('Enter a valid deployed contract address.');
  const stats=await read(contract,'stats');
  if(stats.name!=='CANONATLAS'||!['1.0.0','1.1.0'].includes(stats.version)||stats.citation_mode!=='DETERMINISTIC_REFERENCE_IDS')throw Error('Contract name, version or citation policy mismatch. Signing disabled.');
  const id=Number($('worldId').value);
@@ -200,6 +214,7 @@ async function sign(method,args){if(!actor)throw Error('Connect a Studionet wall
  const gates=actionGates(world,entry,actor);
  const key={create_world:'create',propose_entry:'propose',assess_entry:'assess',ratify_entry:'ratify',decline_entry:'decline'}[method];
  if(pendingTx)throw Error('Pending transaction hash exists. Resume its verification; never sign the same action twice.');
+ if(!verifiedDeployment)throw Error('Verify deployed contract stats at LATEST_FINAL before requesting a signature.');
  if(method!=='create_world'&&!gates[key])throw Error('Current wallet or finalized state does not authorize '+method);
  txProgress('signing',method,'Check MetaMask and confirm or reject the request.');
  log('Wallet signature requested for '+method+'. Inspect the request in MetaMask.');
@@ -386,18 +401,30 @@ $('txProgressDismiss').addEventListener('click',()=>{
  $('txProgress').hidden=true;
 });
 $('txHistoryRefresh').addEventListener('click',renderTxHistory);
-$('contract').addEventListener('change',()=>{
- contract=$('contract').value.trim();
- if(addressValid(contract))localStorage.setItem('canonatlas_address',contract);
- world=null;entry=null;pendingTx=loadPending(contract);setMode(false);render();
+function switchContract(next,{resetIds=false}={}){
+ if(busy||pendingTx){
+  log('Resolve the current pending transaction by hash before switching contracts.');
+  return;
+ }
+ if(!addressValid(next))throw Error('Invalid contract address.');
+ contract=next;
+ $('contract').value=next;
+ localStorage.setItem('canonatlas_address',next);
+ world=null;entry=null;pendingTx=loadPending(next);
+ setMode(false);
+ if(resetIds){$('worldId').value='0';$('entryId').value='0';}
+ render();
  if(pendingTx){
-  txProgress('unverified',pendingTx.method,'Stored transaction on this contract; use Resume verification.',pendingTx.hash);
+  txProgress('unverified',pendingTx.method,'Original transaction for this contract; verify before signing.',pendingTx.hash);
  }else{
-  restoreLastTx();
-  void reconcileArchivedOutcomes();
+  restoreLastTx();void reconcileArchivedOutcomes();
  }
  renderTxHistory();
-});
+ return run(refresh);
+}
+$('contract').addEventListener('change',()=>switchContract($('contract').value.trim()));
+$('selectV11').addEventListener('click',()=>switchContract(DEPLOYMENTS.v11,{resetIds:true}));
+$('selectV1').addEventListener('click',()=>switchContract(DEPLOYMENTS.v1,{resetIds:false}));
 $('scene').addEventListener('input',()=>updateHash().catch(e=>log(e.message)));
 $('copyHash').addEventListener('click',()=>navigator.clipboard?.writeText($('sceneHash').textContent));
 $('create').addEventListener('click',()=>run(async()=>{

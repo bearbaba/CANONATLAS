@@ -25,3 +25,6 @@ jobs:
         env:
           CANONATLAS_CONTRACT_ADDRESS: '0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0'
         run: node scripts/verify-live.mjs
+
+      - name: Verify CANONATLAS V1.1 source and LATEST_FINAL deployment (read-only)
+        run: node scripts/verify-v11-live.mjs
