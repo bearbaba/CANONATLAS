@@ -206,10 +206,15 @@ function render(){const w=world||example;renderRules(w);
  $('connect').textContent=actor?'Disconnect':'Connect wallet ↗';
  $('connect').disabled=busy;
 }
-async function updateHash(){const data=new TextEncoder().encode($('scene').value);
+async function updateHash(){
+ if(entry){$('sceneHash').textContent=entry.scene_sha256;return entry.scene_sha256;}
+ const snapshot=$('scene').value;
+ const data=new TextEncoder().encode(snapshot);
  const arr=new Uint8Array(await crypto.subtle.digest('SHA-256',data));
  const hex=Array.from(arr,b=>b.toString(16).padStart(2,'0')).join('');
- $('sceneHash').textContent=hex;return hex;
+ // An old async draft digest must never overwrite a newly loaded signed Entry.
+ if(!entry&&$('scene').value===snapshot)$('sceneHash').textContent=hex;
+ return hex;
 }
 async function refresh(){
  setMode(false);
