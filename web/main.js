@@ -197,7 +197,11 @@ async function refresh(){
  const entryId=Number($('entryId').value);
  entry=null;
  if(Number.isSafeInteger(entryId)&&entryId>0&&entryId<=stats.entries){
-  const e=await read(contract,'get_entry',[entryId]);if(!validEntry(e,world))throw Error('Entry identity or status does not match this world');entry=e;
+  const e=await read(contract,'get_entry',[entryId]);
+  // A global entry counter may point at a different world. Ignore the stale
+  // selector rather than blocking a verified world or proposing new lore.
+  if(validEntry(e,world))entry=e;
+  else{$('entryId').value='0';entry=null;}
  }
  setMode(true);log('LATEST_FINAL VERIFIED\nContract '+short(contract)+'\nWorld #'+world.id+' / canon v'+world.canon_version+'\nPending: '+(world.pending_entry||'none')+'\nEntry: '+(entry?.status||'not selected')+'\nNo transaction is marked successful without a final-state readback.');
 }
@@ -424,7 +428,10 @@ function switchContract(next,{resetIds=false}={}){
 }
 $('contract').addEventListener('change',()=>switchContract($('contract').value.trim()));
 $('selectV11').addEventListener('click',()=>switchContract(DEPLOYMENTS.v11,{resetIds:true}));
-$('selectV1').addEventListener('click',()=>switchContract(DEPLOYMENTS.v1,{resetIds:false}));
+$('selectV1').addEventListener('click',()=>{
+  if(!busy&&!pendingTx){$('worldId').value='1';$('entryId').value='1';}
+  return switchContract(DEPLOYMENTS.v1,{resetIds:false});
+});
 $('scene').addEventListener('input',()=>updateHash().catch(e=>log(e.message)));
 $('copyHash').addEventListener('click',()=>navigator.clipboard?.writeText($('sceneHash').textContent));
 $('create').addEventListener('click',()=>run(async()=>{
