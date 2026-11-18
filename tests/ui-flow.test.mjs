@@ -26,7 +26,7 @@ function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntr
   hash:HASH,method:'assess_entry',stage:'failed',
   detail:'FINALIZED · unsuccessful execution or consensus: FINISHED_WITH_ERROR / MAJORITY_DISAGREE'});
  const initial={worldId:'1',entryId:'1',worldTitle:'The Glass Archipelago',
-   premise:'A sea-bound world of original imaginary characters.',
+   premise:'A sea-bound world of original imaginary characters.',rules:JSON.stringify(RULES),
    scene:'In year 166, Mira studied a memory mirror while nobody crossed the Quiet Sea.',
    entryTitle:'A memory of the harbor'};
  const $=id=>{if(!nodes.has(id)){const x=element();x.value=initial[id]||'';nodes.set(id,x)}return nodes.get(id)};

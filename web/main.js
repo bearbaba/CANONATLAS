@@ -7,11 +7,6 @@ const DEPLOYMENTS=Object.freeze({
  v1:'0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0',
  v11:'0x9a08fa0BcE251D5423af41bf5f287bd32BF3779d'
 });
-const EXAMPLE_RULES=[
- {id:'CHAR1',kind:'continuity',text:'The Lumen Keepers preserve the solar lantern and none has crossed the Quiet Sea.'},
- {id:'TIME1',kind:'chronology',text:'The port of Ilyra was founded in year 140 and the Great Tide happened in year 162.'},
- {id:'LAW1',kind:'world_rules',text:'Mirrors store memories but cannot transport living bodies across water.'}
-];
 const emptyWorld={canon:[],canon_version:0,pending_entry:0,canon_sha256:''};
 const labels={continuity:'Living continuity',chronology:'The timeline',world_rules:'Laws of the world'};
 let contract=localStorage.getItem('canonatlas_address')||DEPLOYMENTS.v11,actor='',world=null,entry=null,busy=false,verifiedDeployment=false;
