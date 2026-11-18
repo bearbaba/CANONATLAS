@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {initializeWorkspace,resolveScreen} from '../web/workspace.js';
 
 const screens=["overview","canon","proposal","chain","history"];
-const groupNames=["overview","overview","canon","proposal","chain","history"];
+const groupNames=["overview","overview","overview","canon","proposal","chain","history"];
 function classList(initial=[]){
  const set=new Set(initial);
  return {add:x=>set.add(x),remove:x=>set.delete(x),contains:x=>set.has(x),
@@ -45,7 +45,7 @@ test('default overview shows only its own sections and keeps input nodes mounted
  const api=app.run();
  assert.equal(api.active,'overview');
  assert.equal(app.doc.body.classList.contains('workspace-ready'),true);
- assert.equal(app.panels.filter(x=>!x.hidden).length,2);
+ assert.equal(app.panels.filter(x=>!x.hidden).length,3);
  assert.equal(app.panels[1].value,'I stay mounted');
  for(const p of app.panels){
   assert.equal(p.inert,p.hidden);
@@ -72,7 +72,7 @@ test('direct deep links, browser back and unknown URLs remain safe',()=>{
  assert.equal(api.active,screens.at(-1));
  assert.equal(app.panels.filter(x=>!x.hidden).length,1);
  app.win.location.hash='#overview';app.events.hashchange();
- assert.equal(app.panels.filter(x=>!x.hidden).length,2);
+ assert.equal(app.panels.filter(x=>!x.hidden).length,3);
  app.win.location.hash='#not-a-workspace-panel';app.events.hashchange();
  assert.equal(api.active,'overview');
  assert.equal(resolveScreen('#top',screens),'overview');

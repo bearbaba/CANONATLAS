@@ -12,11 +12,9 @@ const EXAMPLE_RULES=[
  {id:'TIME1',kind:'chronology',text:'The port of Ilyra was founded in year 140 and the Great Tide happened in year 162.'},
  {id:'LAW1',kind:'world_rules',text:'Mirrors store memories but cannot transport living bodies across water.'}
 ];
-const example={id:1,owner:'0x'+'a'.repeat(40),title:'The Glass Archipelago',
- premise:'A sea-bound world of light-bearing guardians, memory mirrors and irreversible tides.',
- canon:EXAMPLE_RULES,canon_version:1,canon_sha256:'',pending_entry:0,ratified_entries:[],closed_entries:[]};
+const emptyWorld={canon:[],canon_version:0,pending_entry:0,canon_sha256:''};
 const labels={continuity:'Living continuity',chronology:'The timeline',world_rules:'Laws of the world'};
-let contract=localStorage.getItem('canonatlas_address')||DEPLOYMENTS.v1,actor='',world=null,entry=null,busy=false,verifiedDeployment=false;
+let contract=localStorage.getItem('canonatlas_address')||DEPLOYMENTS.v11,actor='',world=null,entry=null,busy=false,verifiedDeployment=false;
 const pendingKey=address=>'canonatlas_pending_'+address.toLowerCase();
 function loadPending(address){
  try{return normalizePendingTx(JSON.parse(localStorage.getItem(pendingKey(address))),address)}
@@ -32,12 +30,79 @@ function showPending(){
  $('txBox').hidden=!pendingTx;
  if(pendingTx)$('txLink').href=explorer(pendingTx.hash);
 }
-$('contract').value=contract;$('rules').value=JSON.stringify(EXAMPLE_RULES,null,2);
+$('contract').value=contract;
+const RULE_TEMPLATE=[
+ {id:'CHAR1',kind:'continuity',text:''},
+ {id:'TIME1',kind:'chronology',text:''},
+ {id:'LAW1',kind:'world_rules',text:''}
+];
 function log(text){$('log').textContent=text}
 const writeButtons={create_world:'create',propose_entry:'propose',assess_entry:'assess',
  ratify_entry:'ratify',decline_entry:'decline'};
 let dismissedHash='';
 let lastDisplayedEntryKey='';
+
+const DIRECTORY_PAGE_SIZE=8;
+let directoryVersion=0,directoryContract='',directoryTotal=0,directoryCursor=0;
+let directoryItems=[],directoryLoading=false;
+function renderWorldDirectory(){
+ const root=$('worldDirectoryList');root.replaceChildren();
+ $('worldDirectoryCount').textContent=directoryLoading?'LOADING WORLDS':directoryTotal+' PUBLIC WORLD'+(directoryTotal===1?'':'S');
+ if(!directoryItems.length){
+  const p=document.createElement('p');p.className='community-empty';
+  p.textContent=directoryLoading?'Reading public worlds at LATEST_FINAL…':
+   directoryTotal?'Worlds could not be read. Try again later.':'No worlds yet. Create the first one.';
+  root.append(p);
+ }
+ for(const w of directoryItems){
+  const card=document.createElement('article');card.className='community-world';
+  const meta=document.createElement('div');meta.className='community-world-meta';
+  const id=document.createElement('span');id.textContent='WORLD #'+w.id;
+  const ver=document.createElement('span');ver.textContent='CANON v'+w.canon_version;
+  meta.append(id,ver);
+  const title=document.createElement('h3');title.textContent=String(w.title||'Untitled world');
+  const premise=document.createElement('p');premise.textContent=String(w.premise||'Original fictional world');
+  const footer=document.createElement('div');footer.className='community-world-footer';
+  const steward=document.createElement('small');steward.textContent='Steward '+short(w.owner);
+  const view=document.createElement('button');view.type='button';view.className='button outline';view.textContent='View canon ↗';
+  view.addEventListener('click',()=>{
+   if(busy||pendingTx){log('Resolve the existing transaction before changing world.');return;}
+   $('worldId').value=String(w.id);
+   $('entryId').value=String(w.pending_entry||(Array.isArray(w.ratified_entries)?w.ratified_entries.at(-1):0)||0);
+   return run(async()=>{await refresh();if(window.location)window.location.hash='#canon';});
+  });
+  footer.append(steward,view);card.append(meta,title,premise,footer);root.append(card);
+ }
+ $('worldsMore').hidden=directoryLoading||directoryCursor>=directoryTotal;
+ $('worldsMore').disabled=directoryLoading;
+}
+function loadWorldDirectory(stats){
+ const total=Number(stats?.worlds);
+ if(!Number.isSafeInteger(total)||total<0)return;
+ if(directoryContract===contract.toLowerCase()&&directoryTotal===total)return;
+ directoryVersion++;directoryContract=contract.toLowerCase();directoryTotal=total;
+ directoryCursor=0;directoryItems=[];directoryLoading=false;
+ void loadMoreWorlds();
+}
+async function loadMoreWorlds(){
+ if(directoryLoading||directoryCursor>=directoryTotal){renderWorldDirectory();return;}
+ const revision=directoryVersion,address=contract;
+ const n=Math.min(DIRECTORY_PAGE_SIZE,directoryTotal-directoryCursor);
+ const ids=Array.from({length:n},(_,i)=>directoryTotal-directoryCursor-i);
+ directoryLoading=true;renderWorldDirectory();
+ try{
+  // Public contract reads only. Never fabricate records for a missing/invalid world.
+  const rows=await Promise.allSettled(ids.map(id=>read(address,'get_world',[id])));
+  if(revision!==directoryVersion||address.toLowerCase()!==contract.toLowerCase())return;
+  directoryCursor+=n;
+  rows.forEach((r,i)=>{
+   if(r.status==='fulfilled'&&validWorld(r.value)&&r.value.id===ids[i])directoryItems.push(r.value);
+  });
+ }finally{
+  if(revision===directoryVersion){directoryLoading=false;renderWorldDirectory();}
+ }
+}
+
 function renderTxHistory(){
  const root=$('txHistoryList');root.replaceChildren();
  const items=readTxHistory(localStorage,contract);
@@ -118,6 +183,7 @@ function setMode(live){
 }
 const short=s=>s?`${s.slice(0,8)}…${s.slice(-6)}`:'—';
 function renderRules(w){const parent=$('canonList');parent.replaceChildren();
+ if(!w.canon.length){const p=document.createElement('p');p.className='community-empty';p.textContent='Choose a public world in Overview to see its frozen canon.';parent.append(p);return;}
  for(const [i,r] of w.canon.entries()){
   const a=document.createElement('article');a.className='canon-card';
   const id=document.createElement('div');id.className='id';id.textContent=r.id+' · '+r.kind.toUpperCase();
@@ -152,7 +218,7 @@ function renderEvidence(){
  }
 }
 
-function render(){const w=world||example;renderRules(w);
+function render(){const w=world||emptyWorld;renderRules(w);
  renderEvidence();
  // Never show hardcoded Glass Archipelago branding over a verified different world.
  $('breadcrumbWorld').textContent=world?String(world.title||'World #'+world.id).toUpperCase():'NO WORLD SELECTED';
@@ -179,10 +245,10 @@ function render(){const w=world||example;renderRules(w);
  $('entryReadbackNote').textContent=signed?
   'Entry #'+entry.id+' · '+entry.status+' · Signed on-chain (read-only). To draft another chapter, set ENTRY ID to 0 and read latest-final.':'';
 
- $('canonVersion').textContent='v'+w.canon_version;
- $('worldState').textContent=world?'VERIFIED':'PREVIEW';
+ $('canonVersion').textContent=world?'v'+w.canon_version:'—';
+ $('worldState').textContent=world?'VERIFIED':'SELECT A WORLD';
  $('pendingCount').textContent=world?(w.pending_entry||'NONE'):'—';
- $('canonHash').textContent=world?w.canon_sha256:'No chain commitment in illustrative preview';
+ $('canonHash').textContent=world?w.canon_sha256:'Choose a public world to view its on-chain hash';
  $('entryStatus').textContent=entry?entry.status:'AWAITING SUBMISSION';
  $('verdict').textContent=entry?.assessment?.verdict||'NOT ASSESSED';
  $('reviewNote').textContent=entry?.assessment?.checks?.length?
@@ -190,6 +256,7 @@ function render(){const w=world||example;renderRules(w);
   'A visual preview is not an AI verdict. Only accepted consensus committed to latest-final state is considered verified.';
  const gates=actor?actionGates(world,entry,actor):{};
  for(const action of ['create','propose','assess','ratify','decline'])$(action).disabled=busy||!!pendingTx||!verifiedDeployment||!contract||!actor||!gates[action];
+ $('newChapter').disabled=busy||!!pendingTx||!world||world.pending_entry!==0;
  $('selectV11').disabled=busy||!!pendingTx;
  $('selectV1').disabled=busy||!!pendingTx;
  $('selectV11').classList.toggle('is-selected',contract.toLowerCase()===DEPLOYMENTS.v11.toLowerCase());
@@ -221,8 +288,9 @@ async function refresh(){
  contract=$('contract').value.trim();if(!addressValid(contract))throw Error('Enter a valid deployed contract address.');
  const stats=await read(contract,'stats');
  if(stats.name!=='CANONATLAS'||!['1.0.0','1.1.0'].includes(stats.version)||stats.citation_mode!=='DETERMINISTIC_REFERENCE_IDS')throw Error('Contract name, version or citation policy mismatch. Signing disabled.');
+ loadWorldDirectory(stats);
  const id=Number($('worldId').value);
- if(!Number.isSafeInteger(id)||id<1){world=null;entry=null;log('Contract verified. No world selected yet. Create a world with the steward wallet.');setMode(true);return}
+ if(!Number.isSafeInteger(id)||id<1){world=null;entry=null;log('Verified LATEST_FINAL. Browse public worlds in Overview or create your own world.');setMode(true);return}
  try{const w=await read(contract,'get_world',[id]);if(!validWorld(w))throw Error('Malformed latest-final world state');world=w;}
  catch(e){if(stats.worlds===0||id>stats.worlds){world=null;entry=null;log('Contract verified, but world #'+id+' does not yet exist. Create one as steward.');setMode(true);return}throw e}
  const entryId=Number($('entryId').value);
@@ -448,6 +516,7 @@ function switchContract(next,{resetIds=false}={}){
  world=null;entry=null;pendingTx=loadPending(next);
  setMode(false);
  if(resetIds){$('worldId').value='0';$('entryId').value='0';}
+ directoryVersion++;directoryContract='';directoryTotal=0;directoryCursor=0;directoryItems=[];directoryLoading=false;renderWorldDirectory();
  render();
  if(pendingTx){
   txProgress('unverified',pendingTx.method,'Original transaction for this contract; verify before signing.',pendingTx.hash);
@@ -459,9 +528,18 @@ function switchContract(next,{resetIds=false}={}){
 }
 $('contract').addEventListener('change',()=>switchContract($('contract').value.trim()));
 $('selectV11').addEventListener('click',()=>switchContract(DEPLOYMENTS.v11,{resetIds:true}));
-$('selectV1').addEventListener('click',()=>{
-  if(!busy&&!pendingTx){$('worldId').value='1';$('entryId').value='1';}
-  return switchContract(DEPLOYMENTS.v1,{resetIds:false});
+$('selectV1').addEventListener('click',()=>switchContract(DEPLOYMENTS.v1,{resetIds:true}));
+$('worldsMore').addEventListener('click',()=>loadMoreWorlds());
+$('newChapter').addEventListener('click',()=>{
+ if(!world||world.pending_entry!==0||busy||pendingTx)return;
+ $('entryId').value='0';entry=null;lastDisplayedEntryKey='selected';
+ $('entryTitle').value='';$('scene').value='';render();
+ $('sceneHash').textContent='Enter a scene to calculate draft SHA-256';
+ if(window.location)window.location.hash='#proposal';
+});
+$('rulesTemplate').addEventListener('click',()=>{
+ if($('rules').value.trim()&&!window.confirm('Replace current rules with an empty structure?'))return;
+ $('rules').value=JSON.stringify(RULE_TEMPLATE,null,2);
 });
 $('scene').addEventListener('input',()=>{
  if(entry)return; // On-chain readback is immutable; never replace its hash with a draft hash.
@@ -487,7 +565,7 @@ $('decline').addEventListener('click',()=>run(async()=>{
  if(reason.length<12||reason.length>280)throw Error('A substantive 12–280 character reason is required');
  await sign('decline_entry',[entry.id,reason]);
 }));
-render();updateHash().catch(e=>log(e.message));
+render();renderWorldDirectory();updateHash().catch(e=>log(e.message));
 // Show accepted on-chain canon when available. Never synthesize an on-chain success.
 showPending();
 restoreLastTx();

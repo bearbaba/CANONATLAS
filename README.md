@@ -38,6 +38,12 @@ V1.1 reduces validator narrative-format disagreements by comparing three classif
 
 **Original V1 remains separate:** [`0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0`](https://studio.genlayer.com/?import-contract=0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0) owns its original Worlds #1/#2. Two later V1 `assess_entry` transactions ended `FINALIZED / UNDETERMINED`, and did not become accepted canon decisions. The YouTube video transparently includes these older failure-mode receipts as separate evidence. V1 state was **not migrated** to V1.1.
 
+## Community-first experience
+
+CANONATLAS is not tied to the project creator's wallet or demonstration world. The default public landing uses the V1.1 Studionet contract, showing a paginated read-only directory of actual `get_world` records. Visitors can browse, select a world and inspect the latest pending or ratified entry **without connecting a wallet**. No synthetic records are substituted for failed reads. The original V1 contract remains a separate archive.
+
+New world and chapter forms are blank for every visitor. An optional JSON-rule starter is editable, not auto-signed. After viewing a signed ratified scene, eligible authors can open a fresh chapter draft when there is no pending proposal. All on-chain identity, one-pending-entry, assessment and steward-ratification rules remain enforced by the Intelligent Contract. No accounts, paid backend, off-chain world database or unilateral publisher permissions are introduced.
+
 ## Reviewer-facing website and wallet lifecycle
 
 The deployed GenLayer Studionet contract is selected automatically when [the CANONATLAS website](https://canonatlas.vercel.app) loads. On a live `LATEST_FINAL` read, the visitor sees **World #1**, its ratified **canon version 2**, the status of **Entry #1**, and the **literal evidence/reference IDs** behind GenLayer's three AI judgments. These are read-only, independently finalized records, not a simulated AI verdict.
