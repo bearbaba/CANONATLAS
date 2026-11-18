@@ -19,6 +19,17 @@
 
 **Independent readback:** [`scripts/verify-live.mjs`](scripts/verify-live.mjs) validates deployment source and `LATEST_FINAL` world and entry state, 3 criterion references, original and upgraded canon digests, signer independence and steward ratification. [Successful CI](https://github.com/bearbaba/CANONATLAS/actions/runs/43853942589). The story and rules are original fictional demonstration data; no copyright ownership or general AI accuracy is certified.
 
+## V1.1 deployment — new Studionet address
+
+New deploy submitted in GenLayer Studio on **18 Nov 2026**:
+
+- **V1.1 candidate:** [`0x9a08fa0BcE251D5423af41bf5f287bd32BF3779d`](https://studio.genlayer.com/?import-contract=0x9a08fa0BcE251D5423af41bf5f287bd32BF3779d)
+- **V1 production-like evidence archive:** [`0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0`](https://studio.genlayer.com/?import-contract=0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0)
+- **Status at screenshot capture:** deployment Accepted, not yet independently verified as FINALIZED/executed.
+- `scripts/verify-v11-live.mjs` checks deployed-source identity and `LATEST_FINAL` contract stats **without signing**. Treat results and any completed on-chain write as unverified until that check succeeds.
+
+Use **GenLayer console → V1.1 · New demo** to select the new deployment without losing V1's existing results. Start with World/Entry selectors at zero; the new contract allocates IDs upon successful `create_world`.
+
 ## V1.1 consensus stability candidate (not yet deployed)
 
 A separate contract, [`contracts/canon_atlas_v11.py`](contracts/canon_atlas_v11.py), replaces verbose comparative-JSON consensus with three stable classification labels and validators that independently reassess the frozen canon. Its tests and deployment instructions are in [`docs/V11_DEPLOYMENT.md`](docs/V11_DEPLOYMENT.md). **V1 World #1/#2 and both Undetermined transactions remain on the original deployment; no data has been migrated.** Do not describe V1.1 as deployed or consensus-verified until a new Studionet transaction is accepted.

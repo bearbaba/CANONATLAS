@@ -421,3 +421,13 @@ test('new V1.1 contract address works with UI version gate without reclassifying
  assert.match(app,/\['1\.0\.0','1\.1\.0'\]\.includes\(stats\.version\)/);
  assert.match(app,/stats\.citation_mode/);
 });
+
+test('V1.1 quick-select has independent address, resets example IDs, and preserves V1 archive selection',()=>{
+ const html=readFileSync(new URL('../web/index.html',import.meta.url),'utf8');
+ const main=readFileSync(new URL('../web/main.js',import.meta.url),'utf8');
+ assert.ok(html.includes('id="selectV11"')&&html.includes('id="selectV1"'));
+ assert.ok(main.includes("v11:'0x9a08fa0BcE251D5423af41bf5f287bd32BF3779d'"));
+ assert.ok(main.includes("v1:'0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0'"));
+ assert.ok(main.includes("switchContract(DEPLOYMENTS.v11,{resetIds:true})"));
+ assert.ok(main.includes("!verifiedDeployment"),'write buttons remain locked until successful final-state stats verification');
+});
