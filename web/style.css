@@ -130,3 +130,8 @@
 .deployment-option:hover:not(:disabled){border-color:#a991dc;background:#2c213f}
 .deployment-option.is-selected{border-color:#b8a0ea;color:#f3e8ff;background:#352949}
 .deployment-note{color:#968cab;font-size:11px;line-height:1.5}
+
+/* Chain-synced chapter display: lock assessed entry text to its signed scene. */
+.field input[readonly],.field textarea[readonly]{background:#181426;border-color:#524466;color:#f2e9ff;cursor:default}
+.entry-readback-note{display:block;color:#bba8d1;font-size:10px;line-height:1.65;margin-top:8px}
+.entry-readback-note[hidden]{display:none!important}

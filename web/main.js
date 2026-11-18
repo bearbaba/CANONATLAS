@@ -37,6 +37,7 @@ function log(text){$('log').textContent=text}
 const writeButtons={create_world:'create',propose_entry:'propose',assess_entry:'assess',
  ratify_entry:'ratify',decline_entry:'decline'};
 let dismissedHash='';
+let lastDisplayedEntryKey='';
 function renderTxHistory(){
  const root=$('txHistoryList');root.replaceChildren();
  const items=readTxHistory(localStorage,contract);
@@ -153,6 +154,31 @@ function renderEvidence(){
 
 function render(){const w=world||example;renderRules(w);
  renderEvidence();
+ // Never show hardcoded Glass Archipelago branding over a verified different world.
+ $('breadcrumbWorld').textContent=world?String(world.title||'World #'+world.id).toUpperCase():'NO WORLD SELECTED';
+ const signed=!!entry;
+ const entryKey=signed?contract.toLowerCase()+':'+entry.id+':'+entry.scene_sha256:'';
+ if(signed){
+  // Display the immutable committed scene and its original on-chain hash.
+  // Steward ratify uses entry.id; it does NOT sign or modify these text fields.
+  $('entryTitle').value=String(entry.title||'');
+  $('scene').value=String(entry.scene||'');
+  $('sceneHash').textContent=entry.scene_sha256;
+ }else if(lastDisplayedEntryKey){
+  // Deselecting an existing entry must not leave its signed text looking
+  // like a new editable proposal. New author drafts begin empty.
+  $('entryTitle').value='';
+  $('scene').value='';
+  $('sceneHash').textContent='Enter a scene to calculate draft SHA-256';
+ }
+ lastDisplayedEntryKey=entryKey;
+ $('entryTitle').readOnly=signed;
+ $('scene').readOnly=signed;
+ $('sceneCommitLabel').textContent=signed?'SIGNED SCENE COMMITMENT · ON-CHAIN':'SCENE COMMITMENT · DRAFT';
+ $('entryReadbackNote').hidden=!signed;
+ $('entryReadbackNote').textContent=signed?
+  'Entry #'+entry.id+' · '+entry.status+' · Signed on-chain (read-only). To draft another chapter, set ENTRY ID to 0 and read latest-final.':'';
+
  $('canonVersion').textContent='v'+w.canon_version;
  $('worldState').textContent=world?'VERIFIED':'PREVIEW';
  $('pendingCount').textContent=world?(w.pending_entry||'NONE'):'—';
@@ -432,7 +458,10 @@ $('selectV1').addEventListener('click',()=>{
   if(!busy&&!pendingTx){$('worldId').value='1';$('entryId').value='1';}
   return switchContract(DEPLOYMENTS.v1,{resetIds:false});
 });
-$('scene').addEventListener('input',()=>updateHash().catch(e=>log(e.message)));
+$('scene').addEventListener('input',()=>{
+ if(entry)return; // On-chain readback is immutable; never replace its hash with a draft hash.
+ updateHash().catch(e=>log(e.message));
+});
 $('copyHash').addEventListener('click',()=>navigator.clipboard?.writeText($('sceneHash').textContent));
 $('create').addEventListener('click',()=>run(async()=>{
  const title=$('worldTitle').value.trim(),premise=$('premise').value.trim();
@@ -441,6 +470,7 @@ $('create').addEventListener('click',()=>run(async()=>{
 }));
 $('propose').addEventListener('click',()=>run(async()=>{
  if(!world)throw Error('Load a real world from the contract first');
+ if(entry)throw Error('A signed entry is selected. Set ENTRY ID to 0 and read latest-final before drafting a new chapter.');
  const scene=$('scene').value;const hash=await updateHash();
  await sign('propose_entry',[world.id,$('entryTitle').value.trim(),scene,hash]);
 }));
