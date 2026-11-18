@@ -19,20 +19,24 @@
 
 **Independent readback:** [`scripts/verify-live.mjs`](scripts/verify-live.mjs) validates deployment source and `LATEST_FINAL` world and entry state, 3 criterion references, original and upgraded canon digests, signer independence and steward ratification. [Successful CI](https://github.com/bearbaba/CANONATLAS/actions/runs/43853942589). The story and rules are original fictional demonstration data; no copyright ownership or general AI accuracy is certified.
 
-## V1.1 deployment — new Studionet address
+## V1.1 live on Studionet — verified full workflow (18 Nov 2026)
 
-New deploy submitted in GenLayer Studio on **18 Nov 2026**:
+**CANONATLAS V1.1** is deployed at [`0x9a08fa0BcE251D5423af41bf5f287bd32BF3779d`](https://studio.genlayer.com/?import-contract=0x9a08fa0BcE251D5423af41bf5f287bd32BF3779d). [Read-only GitHub Actions verification](https://github.com/bearbaba/CANONATLAS/actions) confirmed deployed-source identity against [`contracts/canon_atlas_v11.py`](contracts/canon_atlas_v11.py), `LATEST_FINAL` contract stats, and policy `version=1.1.0`.
 
-- **V1.1 candidate:** [`0x9a08fa0BcE251D5423af41bf5f287bd32BF3779d`](https://studio.genlayer.com/?import-contract=0x9a08fa0BcE251D5423af41bf5f287bd32BF3779d)
-- **V1 production-like evidence archive:** [`0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0`](https://studio.genlayer.com/?import-contract=0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0)
-- **Status at screenshot capture:** deployment Accepted, not yet independently verified as FINALIZED/executed.
-- `scripts/verify-v11-live.mjs` checks deployed-source identity and `LATEST_FINAL` contract stats **without signing**. Treat results and any completed on-chain write as unverified until that check succeeds.
+A full **real-wallet Studionet** walkthrough demonstrates **The Lantern Isles**, World #1, with one independent steward and another author:
 
-Use **GenLayer console → V1.1 · New demo** to select the new deployment without losing V1's existing results. Start with World/Entry selectors at zero; the new contract allocates IDs upon successful `create_world`.
+| Step | Finalized transaction | Verified result |
+| --- | --- | --- |
+| Steward creates World | [`create_world`](https://explorer-studio.genlayer.com/tx/0x6093a995d9d1397c318b6bb2f6b2b82b89190b77a5bbbfc31ab5ef2f6983269f) | World #1, canon v1, three frozen rules |
+| Independent author submits original chapter | [`propose_entry`](https://explorer-studio.genlayer.com/tx/0xea38e40cbce27d30be9cb024ff473120a349c706761f8944dec21104fdfbd276) | Entry #1 `SUBMITTED`, content SHA-256 |
+| GenLayer independently evaluates the frozen canon | [`assess_entry`](https://explorer-studio.genlayer.com/tx/0x3e6593206e882f28818757e198f86d457f7620df20399b1af26364185b5fd12e) | `CONSISTENT`; continuity, chronology, world_rules all PASS |
+| Owner separately ratifies | [`ratify_entry`](https://explorer-studio.genlayer.com/tx/0x9ea7c1ab5cd142563fe416d815894163ff610c9b2287e31fb15bca26a6f312eb) | Entry #1 `RATIFIED`, canon advances to **v2**, pending entry cleared |
 
-## V1.1 consensus stability candidate (not yet deployed)
+**Full demo (English captions, silent):** [YouTube — CANONATLAS V1.1](https://youtu.be/3Rx6wV-JR_I). **Live application:** [canonatlas.vercel.app](https://canonatlas.vercel.app). [Project Explorer evidence and audit links](docs/CANONATLAS_Project_Explorer_Evidence_2026-11-18.md).
 
-A separate contract, [`contracts/canon_atlas_v11.py`](contracts/canon_atlas_v11.py), replaces verbose comparative-JSON consensus with three stable classification labels and validators that independently reassess the frozen canon. Its tests and deployment instructions are in [`docs/V11_DEPLOYMENT.md`](docs/V11_DEPLOYMENT.md). **V1 World #1/#2 and both Undetermined transactions remain on the original deployment; no data has been migrated.** Do not describe V1.1 as deployed or consensus-verified until a new Studionet transaction is accepted.
+V1.1 reduces validator narrative-format disagreements by comparing three classification labels and requiring validators to independently verify an all-PASS outcome. Deterministic source references identify frozen scene/canon inputs; they do not guarantee an AI judgment is infallible. Steward ratification is a distinct wallet-authorized transaction.
+
+**Original V1 remains separate:** [`0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0`](https://studio.genlayer.com/?import-contract=0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0) owns its original Worlds #1/#2. Two later V1 `assess_entry` transactions ended `FINALIZED / UNDETERMINED`, and did not become accepted canon decisions. The YouTube video transparently includes these older failure-mode receipts as separate evidence. V1 state was **not migrated** to V1.1.
 
 ## Reviewer-facing website and wallet lifecycle
 
@@ -40,7 +44,7 @@ The deployed GenLayer Studionet contract is selected automatically when [the CAN
 
 For a new world, the connected Steward creates the canon; a **different wallet** proposes a story and requests independent AI consensus; only the original Steward may ratify a consistent proposal. The application waits for **FINALIZED / successful execution / accepted consensus**, reads the new on-chain state and verifies the signer/entry before showing success. Browser refreshes and RPC timeouts preserve the transaction hash. The visitor can resume checking the same hash without submitting a duplicate signature; wallet/chain switches revoke signing authorization.
 
-**Verification boundary:** Historical accepted and signed contract actions listed below were initiated through GenLayer Studio. Frontend flow tests use a simulated wallet; they are not a recording of a real user signing through the production site. A live browser wallet-signing walkthrough and a genuine screen capture remain necessary before claiming that final end-to-end demonstration.
+**Verification boundary:** The V1 evidence includes historical Studio transactions. The separately documented V1.1 workflow is a real browser-wallet signing recording with four independent on-chain transaction links. UI mock tests do not independently establish Studionet consensus; see the verified V1.1 evidence above.
 
 ## The product that makes this different
 
@@ -103,9 +107,9 @@ The **Glass Archipelago** is fictional. Its three immutable starting rules state
 
 ## Proof status and constraints
 
-**Verified in CI:** 19 Python unit tests and 8 JavaScript tests, contract syntax, frontend production build and unsigned GenLayer ABI/schema checks. [GitHub Actions](https://github.com/bearbaba/CANONATLAS/actions). These tests do not replace signed Studionet consensus.
+**Verified in CI:** Python unit tests, JavaScript UI/transaction tests, contract schema/ABI checks, production frontend build, V1 code/readback checks, and V1.1 deployed-source / LATEST_FINAL policy verification. [GitHub Actions](https://github.com/bearbaba/CANONATLAS/actions). These tests supplement real signed Studionet evidence.
 
-**Awaiting live acceptance:** deployed Studionet source/ABI, independently confirmed multi-validator consensus, the signed `SUBMITTED → CONSISTENT → RATIFIED` workflow and browser-wallet end-to-end verification. Use the [Studio acceptance guide](docs/STUDIO_ACCEPTANCE.md).
+**Live verified:** V1.1 deployment/source identity, Studio `LATEST_FINAL` readback, separate steward/author signed transactions, accepted `CONSISTENT` assessment, and owner-only `RATIFIED` canon v2 are documented in the [on-chain evidence record](docs/CANONATLAS_Project_Explorer_Evidence_2026-11-18.md). CI/mock tests supplement, but do not replace, the four recorded Studionet transactions.
 
 There is no token, payout, copyright transfer, ownership verification, user identity proof, paid service or auto-publication. Consensus applies only to the submitted text and frozen original-fiction canon; interpretations can be wrong.
 
