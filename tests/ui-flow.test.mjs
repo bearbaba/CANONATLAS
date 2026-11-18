@@ -30,10 +30,10 @@ function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntr
    scene:'In year 166, Mira studied a memory mirror while nobody crossed the Quiet Sea.',
    entryTitle:'A memory of the harbor'};
  const $=id=>{if(!nodes.has(id)){const x=element();x.value=initial[id]||'';nodes.set(id,x)}return nodes.get(id)};
- let world={id:1,owner:OWNER,canon_version:1,canon:RULES,
+ let world={id:1,owner:OWNER,title:'The Lantern Isles',canon_version:1,canon:RULES,
    pending_entry:pendingEntry??1,ratified_entries:[],closed_entries:[],canon_sha256:'a'.repeat(64)};
  let worldsCount=1,entriesCount=1;
- let entry=entryExists?{id:1,world_id:1,author:AUTHOR,status:entryStatus,canon_version:1,
+ let entry=entryExists?{id:1,world_id:1,author:AUTHOR,title:'The Memory Across the Mist',status:entryStatus,canon_version:1,
    scene:'In year 166, Mira read a mirror memory.',scene_sha256:'b'.repeat(64),
    assessment_runs:entryStatus==='SUBMITTED'?0:1,assessment:{verdict:'CONSISTENT',checks:[
     {criterion:'chronology',result:'PASS',reason:'The time sequence matches frozen canon.',
@@ -430,4 +430,41 @@ test('V1.1 quick-select has independent address, resets example IDs, and preserv
  assert.ok(main.includes("v1:'0x7Ce8aD067679a76a43b3C8f6d64F10A6D8f02eA0'"));
  assert.ok(main.includes("switchContract(DEPLOYMENTS.v11,{resetIds:true})"));
  assert.ok(main.includes("!verifiedDeployment"),'write buttons remain locked until successful final-state stats verification');
+});
+
+test('ratify screen is synced to immutable World/Entry LATEST_FINAL instead of old static fixture',async()=>{
+ const h=harness({actor:OWNER,entryStatus:'CONSISTENT'});
+ await flush();await h.click('connect');
+ assert.equal(h.$('breadcrumbWorld').textContent,'THE LANTERN ISLES');
+ assert.equal(h.$('entryTitle').value,'The Memory Across the Mist');
+ assert.equal(h.$('scene').value,'In year 166, Mira read a mirror memory.');
+ assert.equal(h.$('sceneHash').textContent,'b'.repeat(64));
+ assert.equal(h.$('sceneCommitLabel').textContent,'SIGNED SCENE COMMITMENT · ON-CHAIN');
+ assert.equal(h.$('entryReadbackNote').hidden,false);
+ assert.equal(h.$('entryTitle').readOnly,true);
+ assert.equal(h.$('scene').readOnly,true);
+ assert.equal(h.$('ratify').disabled,false);
+ await h.click('ratify');
+ assert.equal(h.writes[0].method,'ratify_entry');
+ assert.equal(h.writes[0].args[0],1);
+ assert.equal(h.$('entryStatus').textContent,'RATIFIED');
+ assert.equal(h.$('canonVersion').textContent,'v2');
+ assert.equal(h.writes.length,1);
+});
+test('no on-chain entry selection leaves editable draft, not misleading signed commitment',async()=>{
+ const h=harness({actor:AUTHOR,pendingEntry:0,entryExists:false});
+ await flush();await h.click('connect');
+ assert.equal(h.$('breadcrumbWorld').textContent,'THE LANTERN ISLES');
+ assert.equal(h.$('entryTitle').readOnly,false);
+ assert.equal(h.$('scene').readOnly,false);
+ assert.equal(h.$('entryReadbackNote').hidden,true);
+ assert.equal(h.$('sceneCommitLabel').textContent,'SCENE COMMITMENT · DRAFT');
+ assert.equal(h.$('propose').disabled,false);
+});
+test('world title and signed chapter content are not hardcoded in the visible HTML',()=>{
+ const html=readFileSync(new URL('../web/index.html',import.meta.url),'utf8');
+ assert.ok(html.includes('id="breadcrumbWorld"'));
+ assert.ok(html.includes('id="sceneCommitLabel"'));
+ assert.ok(html.includes('id="entryReadbackNote"'));
+ assert.ok(!html.includes('ATLAS / THE GLASS ARCHIPELAGO /'));
 });
