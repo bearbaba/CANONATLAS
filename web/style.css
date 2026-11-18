@@ -135,3 +135,25 @@
 .field input[readonly],.field textarea[readonly]{background:#181426;border-color:#524466;color:#f2e9ff;cursor:default}
 .entry-readback-note{display:block;color:#bba8d1;font-size:10px;line-height:1.65;margin-top:8px}
 .entry-readback-note[hidden]{display:none!important}
+
+/* Compact public world directory. Read-only discovery never needs a wallet. */
+.community-section{padding-top:48px}
+.community-guide{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 20px}
+.community-guide span{border:1px solid #40364f;background:#171422;border-radius:7px;color:#c0b0d4;padding:9px 12px;font-size:11px}
+.community-world-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px}
+.community-world{border:1px solid #423650;background:linear-gradient(140deg,#1c172b,#13111e);
+ border-radius:13px;padding:22px;display:flex;flex-direction:column;gap:12px;min-height:200px}
+.community-world-meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;color:#c6a8f0;
+ font:700 10px ui-monospace,monospace;letter-spacing:.08em}
+.community-world h3{font-size:19px;letter-spacing:-.025em;overflow-wrap:anywhere}
+.community-world p{font-size:12px;line-height:1.6;color:#a99fba;flex:1;overflow-wrap:anywhere}
+.community-world-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.community-world-footer small{color:#9386a8;font:11px ui-monospace,monospace}
+.community-world-footer .button{min-height:36px;padding:8px 12px}
+.community-empty{border:1px dashed #51445f;border-radius:10px;padding:24px;grid-column:1/-1;
+ color:#b4a3ca;font-size:13px;line-height:1.6}
+.community-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.proposal-header-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.proposal-header-actions .button{min-height:36px;padding:8px 12px;font-size:11px}
+.text-link{border:0;background:none;color:#d1b4fc;padding:0;text-decoration:underline;font-size:11px}
+@media(max-width:760px){.community-world-grid{grid-template-columns:1fr}.community-world{min-height:0}}

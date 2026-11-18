@@ -26,7 +26,7 @@ function harness({actor=OWNER,entryStatus='CONSISTENT',timeout=false,pendingEntr
   hash:HASH,method:'assess_entry',stage:'failed',
   detail:'FINALIZED · unsuccessful execution or consensus: FINISHED_WITH_ERROR / MAJORITY_DISAGREE'});
  const initial={worldId:'1',entryId:'1',worldTitle:'The Glass Archipelago',
-   premise:'A sea-bound world of original imaginary characters.',
+   premise:'A sea-bound world of original imaginary characters.',rules:JSON.stringify(RULES),
    scene:'In year 166, Mira studied a memory mirror while nobody crossed the Quiet Sea.',
    entryTitle:'A memory of the harbor'};
  const $=id=>{if(!nodes.has(id)){const x=element();x.value=initial[id]||'';nodes.set(id,x)}return nodes.get(id)};
@@ -83,7 +83,7 @@ const {readTxHistory,upsertTxHistory,migrateLegacyTx}=globalThis.historyDeps;`;
   deps,tx:{finalReceipt,combineFinalChecks,normalizePendingTx,reconcileReceiptSnapshots,isUndeterminedFinal},safety:{addressValid,validWorld,validEntry,actionGates},
   historyDeps:{readTxHistory,upsertTxHistory,migrateLegacyTx},
   document:{getElementById:$,createElement:element},window:{ethereum:{on:(key,cb)=>events[key]=cb}},
-  localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),
+  localStorage:{getItem:k=>storage.get(k)||(k==='canonatlas_address'?CONTRACT:null),setItem:(k,v)=>storage.set(k,v),
     removeItem:k=>storage.delete(k)},
   crypto:webcrypto,TextEncoder,Number,console
  });
@@ -467,4 +467,34 @@ test('world title and signed chapter content are not hardcoded in the visible HT
  assert.ok(html.includes('id="sceneCommitLabel"'));
  assert.ok(html.includes('id="entryReadbackNote"'));
  assert.ok(!html.includes('ATLAS / THE GLASS ARCHIPELAGO /'));
+});
+
+test('community landing has no prefilled signed samples and uses V1.1 for first-time visitors',()=>{
+ const html=readFileSync(new URL('../web/index.html',import.meta.url),'utf8');
+ const js=readFileSync(new URL('../web/main.js',import.meta.url),'utf8');
+ assert.match(html,/id="worldId"[^>]*value="0"/);
+ assert.match(html,/id="entryId"[^>]*value="0"/);
+ assert.match(html,/id="worldDirectoryList"/);
+ assert.ok(!html.includes('value="The Glass Archipelago"'));
+ assert.ok(!html.includes('value="The message beyond the tide"'));
+ assert.ok(!html.includes('In year 166, apprentice Mira uncovered'));
+ assert.ok(js.includes('||DEPLOYMENTS.v11'));
+});
+test('public catalog reads a real contract world without a wallet or transaction',async()=>{
+ const h=harness();await flush();await flush();await flush();
+ assert.equal(h.writes.length,0);
+ assert.equal(h.$('worldDirectoryList').children.length,1);
+ assert.equal(h.$('worldDirectoryList').children[0].children[1].textContent,'The Lantern Isles');
+ assert.equal(h.$('worldDirectoryCount').textContent,'1 PUBLIC WORLD');
+ assert.equal(h.$('worldsMore').hidden,true);
+});
+test('new chapter draft is accessible after reading a ratified entry',async()=>{
+ const h=harness({actor:AUTHOR,pendingEntry:0,entryStatus:'RATIFIED'});
+ await flush();await h.click('connect');await h.click('newChapter');
+ assert.equal(h.$('entryId').value,'0');
+ assert.equal(h.$('scene').value,'');
+ assert.equal(h.$('entryTitle').value,'');
+ assert.equal(h.$('scene').readOnly,false);
+ assert.equal(h.$('propose').disabled,false);
+ assert.equal(h.writes.length,0);
 });
